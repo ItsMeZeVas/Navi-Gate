@@ -1,0 +1,12 @@
+{
+  "name": "navigate-web",
+  "private": true,
+  "scripts": {
+    "dev": "docker compose up",
+    "dev:build": "docker compose up --build",
+    "dev:bg": "docker compose up -d",
+    "stop": "docker compose down",
+    "logs": "docker compose logs -f",
+    "reset-db": "docker compose down -v"
+  }
+}

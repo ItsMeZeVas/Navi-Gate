@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Admin {
+  id           String   @id @default(uuid())
+  usuario      String   @unique
+  passwordHash String
+  creadoEn     DateTime @default(now())
+
+  @@map("admins")
+}
+
+model Qr {
+  id       String    @id @default(uuid())
+  slug     String    @unique
+  nombre   String
+  creadoEn DateTime  @default(now())
+  escaneos Escaneo[]
+  rutas    Ruta[]
+
+  @@map("qrs")
+}
+
+model Bloque {
+  id       String    @id @default(uuid())
+  nombre   String
+  creadoEn DateTime  @default(now())
+  espacios Espacio[]
+  rutas    Ruta[]
+
+  @@map("bloques")
+}
+
+model Ruta {
+  id            String   @id @default(uuid())
+  qrId          String
+  bloqueId      String
+  instrucciones String
+  creadoEn      DateTime @default(now())
+  bloque        Bloque   @relation(fields: [bloqueId], references: [id], onDelete: Cascade)
+  qr            Qr       @relation(fields: [qrId], references: [id], onDelete: Cascade)
+
+  @@unique([qrId, bloqueId])
+  @@map("rutas")
+}
+
+model Espacio {
+  id               String      @id @default(uuid())
+  nombre           String
+  tipo             TipoEspacio
+  piso             Int
+  bloqueId         String
+  instruccionFinal String
+  creadoEn         DateTime    @default(now())
+  actualizadoEn    DateTime    @updatedAt
+  bloque           Bloque      @relation(fields: [bloqueId], references: [id], onDelete: Cascade)
+
+  @@index([bloqueId, piso])
+  @@map("espacios")
+}
+
+model Escaneo {
+  id          String   @id @default(uuid())
+  qrId        String
+  escaneadoEn DateTime @default(now())
+
+  qr Qr @relation(fields: [qrId], references: [id], onDelete: Cascade)
+
+  @@index([qrId])
+  @@map("escaneos")
+}
+
+enum TipoEspacio {
+  SALON
+  OFICINA
+  LABORATORIO
+  CAFETERIA
+  BANO
+  OTRO
+}
