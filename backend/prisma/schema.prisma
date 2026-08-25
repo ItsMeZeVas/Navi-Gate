@@ -1,12 +1,33 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
 }
 
+// ---------------------------------------------------------
+// Navi-Gate — modelo de datos
+// ---------------------------------------------------------
+
+// Tipos de espacio dentro de un bloque. Se puede ampliar sin
+// tocar la estructura de tablas (solo agregar un valor aquí).
+enum TipoEspacio {
+  SALON
+  OFICINA
+  LABORATORIO
+  CAFETERIA
+  BANO
+  OTRO
+}
+
+// Administrador del panel. Se crea manualmente (seed / consola),
+// no hay endpoint de registro público.
 model Admin {
   id           String   @id @default(uuid())
   usuario      String   @unique
@@ -16,71 +37,67 @@ model Admin {
   @@map("admins")
 }
 
+// Punto físico donde está pegado un código QR.
+// El "slug" es el identificador que va en la URL del QR
+// (ej. /qr/entrada-principal) y es lo que el sistema usa
+// para saber el punto de origen sin preguntarle nada al usuario.
 model Qr {
-  id       String    @id @default(uuid())
-  slug     String    @unique
-  nombre   String
-  creadoEn DateTime  @default(now())
-  escaneos Escaneo[]
-  rutas    Ruta[]
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  nombre    String // ej. "Entrada Principal"
+  creadoEn  DateTime @default(now())
+
+  rutas Ruta[]
 
   @@map("qrs")
 }
 
+// Un bloque/edificio/zona del campus. Agrupa uno o varios espacios
+// (salones, oficinas, laboratorios, cafeterías, baños, etc).
 model Bloque {
-  id       String    @id @default(uuid())
-  nombre   String
-  creadoEn DateTime  @default(now())
+  id       String   @id @default(uuid())
+  nombre   String // ej. "Bloque C"
+  creadoEn DateTime @default(now())
+
   espacios Espacio[]
   rutas    Ruta[]
 
   @@map("bloques")
 }
 
+// Ruta manual: instrucciones de texto para llegar desde un QR
+// (origen) hasta un Bloque (destino). Cada combinación QR-Bloque
+// debe tener como máximo una ruta cargada.
 model Ruta {
-  id            String   @id @default(uuid())
+  id            String @id @default(uuid())
   qrId          String
   bloqueId      String
-  instrucciones String
-  creadoEn      DateTime @default(now())
-  bloque        Bloque   @relation(fields: [bloqueId], references: [id], onDelete: Cascade)
-  qr            Qr       @relation(fields: [qrId], references: [id], onDelete: Cascade)
+  instrucciones String // ej. "Camina hacia el Bloque C, sube al segundo piso, luego al tercero"
 
-  @@unique([qrId, bloqueId])
+  qr     Qr     @relation(fields: [qrId], references: [id], onDelete: Cascade)
+  bloque Bloque @relation(fields: [bloqueId], references: [id], onDelete: Cascade)
+
+  creadoEn DateTime @default(now())
+
+  @@unique([qrId, bloqueId]) // una sola ruta por combinación origen-destino
   @@map("rutas")
 }
 
+// Espacio dentro de un bloque: salón, oficina, laboratorio, cafetería, baño, etc.
+// El "nombre" es lo único editable por el admin (renombrar), y renombrarlo
+// no afecta ni la ruta del bloque ni la instrucción final.
 model Espacio {
-  id               String      @id @default(uuid())
-  nombre           String
-  tipo             TipoEspacio
-  piso             Int
-  bloqueId         String
-  instruccionFinal String
-  creadoEn         DateTime    @default(now())
-  actualizadoEn    DateTime    @updatedAt
-  bloque           Bloque      @relation(fields: [bloqueId], references: [id], onDelete: Cascade)
+  id                String      @id @default(uuid())
+  nombre            String // ej. "C307" — editable por el admin
+  tipo              TipoEspacio
+  piso              Int // ej. 3 — permite filtrar espacios por piso dentro de un bloque
+  bloqueId          String
+  instruccionFinal  String // ej. "Segundo piso, tercera puerta a la derecha"
+  creadoEn          DateTime    @default(now())
+  actualizadoEn     DateTime    @updatedAt
+
+  bloque Bloque @relation(fields: [bloqueId], references: [id], onDelete: Cascade)
 
   @@index([bloqueId, piso])
   @@map("espacios")
-}
-
-model Escaneo {
-  id          String   @id @default(uuid())
-  qrId        String
-  escaneadoEn DateTime @default(now())
-
-  qr Qr @relation(fields: [qrId], references: [id], onDelete: Cascade)
-
-  @@index([qrId])
-  @@map("escaneos")
-}
-
-enum TipoEspacio {
-  SALON
-  OFICINA
-  LABORATORIO
-  CAFETERIA
-  BANO
-  OTRO
 }
