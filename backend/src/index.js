@@ -3,6 +3,8 @@ require('dotenv').config();
 
 const { requireAuth } = require('./middleware/auth');
 const adminRoutes = require('./routes/adminRoutes');
+const qrRoutes = require('./routes/qrRoutes');
+const espacioRoutes = require('./routes/espacioRoutes');
 
 const app = express();
 app.use(express.json());
@@ -13,9 +15,10 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/admin', adminRoutes);
+app.use('/api/qr', qrRoutes);
+app.use('/api/espacios', espacioRoutes);
 
 // Ruta de prueba temporal para confirmar que el middleware protege bien.
-// La quitamos (o la reemplazamos por rutas reales) en el siguiente paso.
 app.get('/api/admin/ping', requireAuth, (req, res) => {
   res.json({ mensaje: `Hola ${req.admin.usuario}, tu token es válido.` });
 });
