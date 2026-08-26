@@ -74,6 +74,7 @@ model Ruta {
   qrId          Int
   bloqueId      Int
   instrucciones String[] // lista de pasos, ej. ["Camina hacia el Bloque C.", "Sube al segundo piso."]
+  fotos         String[] @default([]) // URLs de fotos de referencia del recorrido (opcional)
 
   qr     Qr     @relation(fields: [qrId], references: [id], onDelete: Cascade)
   bloque Bloque @relation(fields: [bloqueId], references: [id], onDelete: Cascade)
@@ -94,6 +95,7 @@ model Espacio {
   piso              Int // ej. 3 — permite filtrar espacios por piso dentro de un bloque
   bloqueId          Int
   instruccionFinal  String // ej. "Segundo piso, tercera puerta a la derecha"
+  fotos             String[]    @default([]) // URLs de fotos de referencia del espacio (opcional)
   creadoEn          DateTime    @default(now())
   actualizadoEn     DateTime    @updatedAt
 

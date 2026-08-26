@@ -53,7 +53,24 @@ export const api = {
 
   listarRutas: (token) => request('/api/rutas', { token }),
   crearRuta: (datos, token) => request('/api/rutas', { method: 'POST', body: datos, token }),
-  actualizarRuta: (id, instrucciones, token) =>
-    request(`/api/rutas/${id}`, { method: 'PATCH', body: { instrucciones }, token }),
+  actualizarRuta: (id, instrucciones, fotos, token) =>
+    request(`/api/rutas/${id}`, { method: 'PATCH', body: { instrucciones, fotos }, token }),
   eliminarRuta: (id, token) => request(`/api/rutas/${id}`, { method: 'DELETE', token }),
+
+  // Sube un archivo de imagen y devuelve su URL completa y accesible.
+  subirFoto: async (archivo, token) => {
+    const formData = new FormData()
+    formData.append('foto', archivo)
+
+    const res = await fetch(`${BASE_URL}/api/uploads`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    })
+
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'No se pudo subir la imagen.')
+
+    return `${BASE_URL}${data.url}`
+  },
 }

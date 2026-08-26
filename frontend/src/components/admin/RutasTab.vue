@@ -10,11 +10,12 @@ const bloques = ref([])
 const cargando = ref(true)
 const error = ref('')
 
-const nuevaRuta = ref({ qrId: '', bloqueId: '', pasos: [''] })
+const nuevaRuta = ref({ qrId: '', bloqueId: '', pasos: [''], fotos: [] })
 const creando = ref(false)
 
 const editandoId = ref(null)
 const pasosEdicion = ref([''])
+const fotosEdicion = ref([])
 
 async function cargar() {
   cargando.value = true
@@ -42,17 +43,53 @@ function quitarPaso(lista, indice) {
   if (lista.length > 1) lista.splice(indice, 1)
 }
 
+function quitarFoto(lista, indice) {
+  lista.splice(indice, 1)
+}
+
+const listaFotoObjetivo = ref(null)
+const subiendoFoto = ref(false)
+const inputArchivoFoto = ref(null)
+
+function abrirSelectorArchivo(lista) {
+  listaFotoObjetivo.value = lista
+  inputArchivoFoto.value.click()
+}
+
+async function onArchivoSeleccionado(evento) {
+  const archivo = evento.target.files[0]
+  evento.target.value = ''
+  if (!archivo || !listaFotoObjetivo.value) return
+
+  subiendoFoto.value = true
+  error.value = ''
+  try {
+    const url = await api.subirFoto(archivo, auth.token)
+    listaFotoObjetivo.value.push(url)
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    subiendoFoto.value = false
+  }
+}
+
 async function crear() {
   const pasosLimpios = nuevaRuta.value.pasos.map((p) => p.trim()).filter(Boolean)
+  const fotosLimpias = nuevaRuta.value.fotos.map((f) => f.trim()).filter(Boolean)
   if (!nuevaRuta.value.qrId || !nuevaRuta.value.bloqueId || pasosLimpios.length === 0) return
   creando.value = true
   error.value = ''
   try {
     await api.crearRuta(
-      { qrId: nuevaRuta.value.qrId, bloqueId: nuevaRuta.value.bloqueId, instrucciones: pasosLimpios },
+      {
+        qrId: nuevaRuta.value.qrId,
+        bloqueId: nuevaRuta.value.bloqueId,
+        instrucciones: pasosLimpios,
+        fotos: fotosLimpias,
+      },
       auth.token,
     )
-    nuevaRuta.value = { qrId: '', bloqueId: '', pasos: [''] }
+    nuevaRuta.value = { qrId: '', bloqueId: '', pasos: [''], fotos: [] }
     await cargar()
   } catch (err) {
     error.value = err.message
@@ -64,13 +101,15 @@ async function crear() {
 function empezarEdicion(ruta) {
   editandoId.value = ruta.id
   pasosEdicion.value = [...ruta.instrucciones]
+  fotosEdicion.value = [...(ruta.fotos || [])]
 }
 
 async function guardarEdicion(ruta) {
   const pasosLimpios = pasosEdicion.value.map((p) => p.trim()).filter(Boolean)
+  const fotosLimpias = fotosEdicion.value.map((f) => f.trim()).filter(Boolean)
   if (pasosLimpios.length === 0) return
   try {
-    await api.actualizarRuta(ruta.id, pasosLimpios, auth.token)
+    await api.actualizarRuta(ruta.id, pasosLimpios, fotosLimpias, auth.token)
     editandoId.value = null
     await cargar()
   } catch (err) {
@@ -122,6 +161,24 @@ onMounted(cargar)
         </button>
       </div>
 
+      <div class="fotos-form">
+        <span class="titulo-fotos">Fotos de referencia (opcional)</span>
+        <div class="miniaturas">
+          <div v-for="(foto, i) in nuevaRuta.fotos" :key="i" class="miniatura">
+            <img :src="foto" alt="" />
+            <button type="button" class="btn-quitar-mini" @click="quitarFoto(nuevaRuta.fotos, i)">✕</button>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="btn-agregar-paso"
+          :disabled="subiendoFoto"
+          @click="abrirSelectorArchivo(nuevaRuta.fotos)"
+        >
+          {{ subiendoFoto ? 'Subiendo…' : '+ Subir foto desde el computador' }}
+        </button>
+      </div>
+
       <button type="submit" :disabled="creando">Agregar ruta</button>
     </form>
 
@@ -148,6 +205,25 @@ onMounted(cargar)
               + Agregar instrucción
             </button>
           </div>
+
+          <div class="fotos-form">
+            <span class="titulo-fotos">Fotos de referencia</span>
+            <div class="miniaturas">
+              <div v-for="(foto, i) in fotosEdicion" :key="i" class="miniatura">
+                <img :src="foto" alt="" />
+                <button type="button" class="btn-quitar-mini" @click="quitarFoto(fotosEdicion, i)">✕</button>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="btn-agregar-paso"
+              :disabled="subiendoFoto"
+              @click="abrirSelectorArchivo(fotosEdicion)"
+            >
+              {{ subiendoFoto ? 'Subiendo…' : '+ Subir foto desde el computador' }}
+            </button>
+          </div>
+
           <div class="botones-edicion">
             <button class="btn-guardar" @click="guardarEdicion(ruta)">Guardar</button>
             <button class="btn-cancelar" @click="editandoId = null">Cancelar</button>
@@ -167,6 +243,14 @@ onMounted(cargar)
         </template>
       </li>
     </ul>
+
+    <input
+      ref="inputArchivoFoto"
+      type="file"
+      accept="image/*"
+      class="input-archivo-oculto"
+      @change="onArchivoSeleccionado"
+    />
   </div>
 </template>
 
@@ -244,6 +328,61 @@ onMounted(cargar)
   cursor: pointer;
   font-size: 0.82rem;
   font-weight: 600;
+}
+
+.fotos-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--color-border);
+}
+
+.titulo-fotos {
+  font-size: 0.78rem;
+  color: var(--ng-ink-soft);
+}
+
+.miniaturas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.miniatura {
+  position: relative;
+  width: 70px;
+  height: 70px;
+}
+
+.miniatura img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+}
+
+.btn-quitar-mini {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background: var(--ng-danger);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 0.65rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.input-archivo-oculto {
+  display: none;
 }
 
 .form-nuevo > button[type='submit'] {

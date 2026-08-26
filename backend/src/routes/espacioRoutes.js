@@ -51,7 +51,11 @@ router.get('/', async (req, res) => {
 
       resultado = resultado.map((espacio) => {
         const ruta = qrRecord?.rutas.find((r) => r.bloqueId === espacio.bloqueId);
-        return { ...espacio, rutaDesdeQr: ruta ? ruta.instrucciones : null };
+        return {
+          ...espacio,
+          rutaDesdeQr: ruta ? ruta.instrucciones : null,
+          rutaFotos: ruta ? ruta.fotos : [],
+        };
       });
     }
 
@@ -64,11 +68,13 @@ router.get('/', async (req, res) => {
 
 // POST /api/espacios   (protegido)
 router.post('/', requireAuth, async (req, res) => {
-  const { nombre, tipo, piso, bloqueId, instruccionFinal } = req.body;
+  const { nombre, tipo, piso, bloqueId, instruccionFinal, fotos } = req.body;
 
   if (!nombre || !tipo || piso === undefined || !bloqueId || !instruccionFinal) {
     return res.status(400).json({ error: 'nombre, tipo, piso, bloqueId e instruccionFinal son obligatorios.' });
   }
+
+  const listaFotos = Array.isArray(fotos) ? fotos.map((f) => f.trim()).filter(Boolean) : [];
 
   try {
     const espacio = await prisma.espacio.create({
@@ -78,6 +84,7 @@ router.post('/', requireAuth, async (req, res) => {
         piso: Number(piso),
         bloqueId: Number(bloqueId),
         instruccionFinal: instruccionFinal.trim(),
+        fotos: listaFotos,
       },
       include: { bloque: true },
     });
@@ -92,7 +99,7 @@ router.post('/', requireAuth, async (req, res) => {
 // Permite editar cualquier campo del espacio (nombre, tipo, piso,
 // bloque, instrucción final).
 router.patch('/:id', requireAuth, async (req, res) => {
-  const { nombre, tipo, piso, bloqueId, instruccionFinal } = req.body;
+  const { nombre, tipo, piso, bloqueId, instruccionFinal, fotos } = req.body;
 
   if (nombre !== undefined && !nombre.trim()) {
     return res.status(400).json({ error: 'El nombre no puede estar vacío.' });
@@ -104,6 +111,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
   if (piso !== undefined) data.piso = Number(piso);
   if (bloqueId !== undefined) data.bloqueId = Number(bloqueId);
   if (instruccionFinal !== undefined) data.instruccionFinal = instruccionFinal.trim();
+  if (Array.isArray(fotos)) data.fotos = fotos.map((f) => f.trim()).filter(Boolean);
 
   try {
     const espacio = await prisma.espacio.update({

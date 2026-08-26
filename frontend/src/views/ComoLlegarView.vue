@@ -12,12 +12,20 @@ const session = useSessionStore()
 const espacio = ref(null)
 const cargando = ref(true)
 const error = ref('')
+const fotoActiva = ref(0)
 
 // Los pasos de la ruta ya vienen como lista desde el backend; solo
 // agregamos la instrucción final del espacio como último paso.
 const pasos = computed(() => {
   if (!espacio.value) return []
   return [...(espacio.value.rutaDesdeQr || []), espacio.value.instruccionFinal].filter(Boolean)
+})
+
+// Fotos de la ruta (el trayecto hasta el bloque) primero, y luego
+// las del espacio en sí (el detalle final), todas en un solo carrusel.
+const fotosCarrusel = computed(() => {
+  if (!espacio.value) return []
+  return [...(espacio.value.rutaFotos || []), ...(espacio.value.fotos || [])]
 })
 
 async function cargar() {
@@ -56,7 +64,19 @@ onMounted(cargar)
         <span class="desde">Desde {{ session.qrNombre }}</span>
       </div>
 
-      <div class="placeholder-mapa">Vista del recorrido</div>
+      <div v-if="fotosCarrusel.length" class="carrusel">
+        <img :src="fotosCarrusel[fotoActiva]" alt="Foto de referencia del recorrido" />
+        <div v-if="fotosCarrusel.length > 1" class="puntos">
+          <button
+            v-for="(foto, i) in fotosCarrusel"
+            :key="i"
+            class="punto"
+            :class="{ activo: i === fotoActiva }"
+            @click="fotoActiva = i"
+          ></button>
+        </div>
+      </div>
+      <div v-else class="placeholder-mapa">Vista del recorrido</div>
 
       <ol class="pasos">
         <li v-for="(paso, i) in pasos" :key="i">
@@ -113,6 +133,42 @@ onMounted(cargar)
 .desde {
   font-size: 0.8rem;
   color: var(--ng-ink-soft);
+}
+
+.carrusel {
+  margin-top: 1rem;
+  position: relative;
+}
+
+.carrusel img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 14px;
+  display: block;
+}
+
+.puntos {
+  position: absolute;
+  bottom: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.4rem;
+}
+
+.punto {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 0;
+}
+
+.punto.activo {
+  background: white;
 }
 
 .placeholder-mapa {

@@ -16,11 +16,12 @@ router.get('/', requireAuth, async (req, res) => {
 // POST /api/rutas   (protegido)
 // Conecta un QR de origen con un Bloque de destino.
 router.post('/', requireAuth, async (req, res) => {
-  const { qrId, bloqueId, instrucciones } = req.body;
+  const { qrId, bloqueId, instrucciones, fotos } = req.body;
 
   const pasos = Array.isArray(instrucciones)
     ? instrucciones.map((p) => p.trim()).filter(Boolean)
     : [];
+  const listaFotos = Array.isArray(fotos) ? fotos.map((f) => f.trim()).filter(Boolean) : [];
 
   if (!qrId || !bloqueId || pasos.length === 0) {
     return res.status(400).json({ error: 'qrId, bloqueId y al menos una instrucción son obligatorios.' });
@@ -28,7 +29,7 @@ router.post('/', requireAuth, async (req, res) => {
 
   try {
     const ruta = await prisma.ruta.create({
-      data: { qrId: Number(qrId), bloqueId: Number(bloqueId), instrucciones: pasos },
+      data: { qrId: Number(qrId), bloqueId: Number(bloqueId), instrucciones: pasos, fotos: listaFotos },
       include: { qr: true, bloque: true },
     });
     res.status(201).json(ruta);
@@ -44,7 +45,7 @@ router.post('/', requireAuth, async (req, res) => {
 // Solo se puede editar la lista de instrucciones (no el QR ni el bloque:
 // si cambian, es más claro borrar y crear una ruta nueva).
 router.patch('/:id', requireAuth, async (req, res) => {
-  const { instrucciones } = req.body;
+  const { instrucciones, fotos } = req.body;
 
   const pasos = Array.isArray(instrucciones)
     ? instrucciones.map((p) => p.trim()).filter(Boolean)
@@ -54,10 +55,15 @@ router.patch('/:id', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Debe haber al menos una instrucción.' });
   }
 
+  const data = { instrucciones: pasos };
+  if (Array.isArray(fotos)) {
+    data.fotos = fotos.map((f) => f.trim()).filter(Boolean);
+  }
+
   try {
     const ruta = await prisma.ruta.update({
       where: { id: Number(req.params.id) },
-      data: { instrucciones: pasos },
+      data,
       include: { qr: true, bloque: true },
     });
     res.json(ruta);
