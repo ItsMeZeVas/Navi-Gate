@@ -19,8 +19,7 @@ const creando = ref(false)
 const editandoId = ref(null)
 const edicion = ref(vacio())
 
-// Borradores de texto de las rutas que se están editando inline
-// (bloqueId -> { rutaId: textoEditado }).
+// Borradores de pasos que se están editando inline (rutaId -> array de pasos).
 const borradoresRuta = ref({})
 const guardandoRutaId = ref(null)
 
@@ -46,20 +45,28 @@ async function cargar() {
   }
 }
 
-function textoRuta(ruta) {
-  return borradoresRuta.value[ruta.id] ?? ruta.instrucciones
+function pasosRuta(ruta) {
+  if (!borradoresRuta.value[ruta.id]) {
+    borradoresRuta.value[ruta.id] = [...ruta.instrucciones]
+  }
+  return borradoresRuta.value[ruta.id]
 }
 
-function actualizarBorrador(ruta, valor) {
-  borradoresRuta.value[ruta.id] = valor
+function agregarPaso(ruta) {
+  pasosRuta(ruta).push('')
+}
+
+function quitarPaso(ruta, indice) {
+  const pasos = pasosRuta(ruta)
+  if (pasos.length > 1) pasos.splice(indice, 1)
 }
 
 async function guardarRuta(ruta) {
-  const texto = textoRuta(ruta)
-  if (!texto.trim()) return
+  const pasosLimpios = pasosRuta(ruta).map((p) => p.trim()).filter(Boolean)
+  if (pasosLimpios.length === 0) return
   guardandoRutaId.value = ruta.id
   try {
-    await api.actualizarRuta(ruta.id, texto.trim(), auth.token)
+    await api.actualizarRuta(ruta.id, pasosLimpios, auth.token)
     delete borradoresRuta.value[ruta.id]
     await cargar()
   } catch (err) {
@@ -150,11 +157,21 @@ onMounted(cargar)
         </p>
         <div v-for="ruta in rutasDelBloque(nuevoEspacio.bloqueId)" :key="ruta.id" class="ruta-editable">
           <span class="ruta-origen">Desde: {{ ruta.qr.nombre }}</span>
-          <textarea
-            :value="textoRuta(ruta)"
-            @input="actualizarBorrador(ruta, $event.target.value)"
-            rows="2"
-          ></textarea>
+          <div v-for="(paso, i) in pasosRuta(ruta)" :key="i" class="fila-paso-ruta">
+            <span class="numero-paso">{{ i + 1 }}</span>
+            <input v-model="pasosRuta(ruta)[i]" type="text" />
+            <button
+              v-if="pasosRuta(ruta).length > 1"
+              type="button"
+              class="btn-quitar-paso"
+              @click="quitarPaso(ruta, i)"
+            >
+              ✕
+            </button>
+          </div>
+          <button type="button" class="btn-agregar-paso" @click="agregarPaso(ruta)">
+            + Agregar instrucción
+          </button>
           <button
             class="btn-guardar-ruta"
             :disabled="guardandoRutaId === ruta.id"
@@ -197,11 +214,21 @@ onMounted(cargar)
             </p>
             <div v-for="ruta in rutasDelBloque(edicion.bloqueId)" :key="ruta.id" class="ruta-editable">
               <span class="ruta-origen">Desde: {{ ruta.qr.nombre }}</span>
-              <textarea
-                :value="textoRuta(ruta)"
-                @input="actualizarBorrador(ruta, $event.target.value)"
-                rows="2"
-              ></textarea>
+              <div v-for="(paso, i) in pasosRuta(ruta)" :key="i" class="fila-paso-ruta">
+                <span class="numero-paso">{{ i + 1 }}</span>
+                <input v-model="pasosRuta(ruta)[i]" type="text" />
+                <button
+                  v-if="pasosRuta(ruta).length > 1"
+                  type="button"
+                  class="btn-quitar-paso"
+                  @click="quitarPaso(ruta, i)"
+                >
+                  ✕
+                </button>
+              </div>
+              <button type="button" class="btn-agregar-paso" @click="agregarPaso(ruta)">
+                + Agregar instrucción
+              </button>
               <button
                 class="btn-guardar-ruta"
                 :disabled="guardandoRutaId === ruta.id"
@@ -402,12 +429,53 @@ onMounted(cargar)
   color: var(--ng-navy);
 }
 
-.ruta-editable textarea {
-  padding: 0.5rem 0.6rem;
+.fila-paso-ruta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.numero-paso {
+  flex-shrink: 0;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background: var(--ng-navy);
+  color: white;
+  font-size: 0.68rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fila-paso-ruta input {
+  flex: 1;
+  padding: 0.4rem 0.55rem;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  font-family: inherit;
+  font-size: 0.82rem;
+}
+
+.btn-quitar-paso {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--ng-danger);
+  cursor: pointer;
   font-size: 0.85rem;
+}
+
+.btn-agregar-paso {
+  align-self: flex-start;
+  padding: 0.3rem 0.6rem;
+  background: white;
+  border: 1px dashed var(--ng-navy);
+  color: var(--ng-navy);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 600;
 }
 
 .btn-guardar-ruta {

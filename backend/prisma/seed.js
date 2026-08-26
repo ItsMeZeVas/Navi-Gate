@@ -47,8 +47,7 @@ async function main() {
     create: {
       qrId: qrEntrada.id,
       bloqueId: bloqueC.id,
-      instrucciones:
-        "Camina hacia el Bloque C, sube al segundo piso y luego al tercero.",
+      instrucciones: ["Camina hacia el Bloque C.", "Sube al segundo piso y luego al tercero."],
     },
   });
 

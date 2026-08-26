@@ -18,13 +18,17 @@ router.get('/', requireAuth, async (req, res) => {
 router.post('/', requireAuth, async (req, res) => {
   const { qrId, bloqueId, instrucciones } = req.body;
 
-  if (!qrId || !bloqueId || !instrucciones || !instrucciones.trim()) {
-    return res.status(400).json({ error: 'qrId, bloqueId e instrucciones son obligatorios.' });
+  const pasos = Array.isArray(instrucciones)
+    ? instrucciones.map((p) => p.trim()).filter(Boolean)
+    : [];
+
+  if (!qrId || !bloqueId || pasos.length === 0) {
+    return res.status(400).json({ error: 'qrId, bloqueId y al menos una instrucción son obligatorios.' });
   }
 
   try {
     const ruta = await prisma.ruta.create({
-      data: { qrId: Number(qrId), bloqueId: Number(bloqueId), instrucciones: instrucciones.trim() },
+      data: { qrId: Number(qrId), bloqueId: Number(bloqueId), instrucciones: pasos },
       include: { qr: true, bloque: true },
     });
     res.status(201).json(ruta);
@@ -37,17 +41,23 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 // PATCH /api/rutas/:id   (protegido)
-// Solo se puede editar el texto de instrucciones (no el QR ni el bloque:
+// Solo se puede editar la lista de instrucciones (no el QR ni el bloque:
 // si cambian, es más claro borrar y crear una ruta nueva).
 router.patch('/:id', requireAuth, async (req, res) => {
   const { instrucciones } = req.body;
-  if (!instrucciones || !instrucciones.trim()) {
-    return res.status(400).json({ error: 'Las instrucciones son obligatorias.' });
+
+  const pasos = Array.isArray(instrucciones)
+    ? instrucciones.map((p) => p.trim()).filter(Boolean)
+    : [];
+
+  if (pasos.length === 0) {
+    return res.status(400).json({ error: 'Debe haber al menos una instrucción.' });
   }
+
   try {
     const ruta = await prisma.ruta.update({
       where: { id: Number(req.params.id) },
-      data: { instrucciones: instrucciones.trim() },
+      data: { instrucciones: pasos },
       include: { qr: true, bloque: true },
     });
     res.json(ruta);

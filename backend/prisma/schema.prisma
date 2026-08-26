@@ -70,10 +70,10 @@ model Bloque {
 // (origen) hasta un Bloque (destino). Cada combinación QR-Bloque
 // debe tener como máximo una ruta cargada.
 model Ruta {
-  id            Int    @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   qrId          Int
   bloqueId      Int
-  instrucciones String // ej. "Camina hacia el Bloque C, sube al segundo piso, luego al tercero"
+  instrucciones String[] // lista de pasos, ej. ["Camina hacia el Bloque C.", "Sube al segundo piso."]
 
   qr     Qr     @relation(fields: [qrId], references: [id], onDelete: Cascade)
   bloque Bloque @relation(fields: [bloqueId], references: [id], onDelete: Cascade)

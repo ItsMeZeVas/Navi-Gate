@@ -13,27 +13,21 @@ const espacio = ref(null)
 const cargando = ref(true)
 const error = ref('')
 
-// Partimos el texto de la ruta + la instrucción final en "pasos" cortos,
-// separando por puntos y comas, para que se vea como una lista numerada
-// aunque el admin lo haya escrito como un párrafo seguido.
+// Los pasos de la ruta ya vienen como lista desde el backend; solo
+// agregamos la instrucción final del espacio como último paso.
 const pasos = computed(() => {
   if (!espacio.value) return []
-  const textoCompleto = [espacio.value.rutaDesdeQr, espacio.value.instruccionFinal]
-    .filter(Boolean)
-    .join('. ')
-
-  return textoCompleto
-    .split(/[.,]\s+/)
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .map((p) => (p.endsWith('.') ? p : `${p}.`))
+  return [...(espacio.value.rutaDesdeQr || []), espacio.value.instruccionFinal].filter(Boolean)
 })
 
 async function cargar() {
   cargando.value = true
   try {
     const data = await api.buscarEspacios({ qr: session.qrSlug })
-    espacio.value = data.resultados.find((e) => e.id === route.params.espacioId) || null
+    // route.params.espacioId llega como texto; espacio.id es numérico
+    // desde el cambio a IDs autoincrementales, así que comparamos
+    // convirtiendo ambos al mismo tipo.
+    espacio.value = data.resultados.find((e) => String(e.id) === route.params.espacioId) || null
     if (!espacio.value) error.value = 'No encontramos ese espacio.'
   } catch (err) {
     error.value = err.message
