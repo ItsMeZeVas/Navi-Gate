@@ -29,7 +29,7 @@ enum TipoEspacio {
 // Administrador del panel. Se crea manualmente (seed / consola),
 // no hay endpoint de registro público.
 model Admin {
-  id           String   @id @default(uuid())
+  id           Int      @id @default(autoincrement())
   usuario      String   @unique
   passwordHash String
   creadoEn     DateTime @default(now())
@@ -42,12 +42,13 @@ model Admin {
 // (ej. /qr/entrada-principal) y es lo que el sistema usa
 // para saber el punto de origen sin preguntarle nada al usuario.
 model Qr {
-  id        String   @id @default(uuid())
+  id        Int      @id @default(autoincrement())
   slug      String   @unique
   nombre    String // ej. "Entrada Principal"
   creadoEn  DateTime @default(now())
 
   rutas Ruta[]
+  escaneos Escaneo[]
 
   @@map("qrs")
 }
@@ -55,7 +56,7 @@ model Qr {
 // Un bloque/edificio/zona del campus. Agrupa uno o varios espacios
 // (salones, oficinas, laboratorios, cafeterías, baños, etc).
 model Bloque {
-  id       String   @id @default(uuid())
+  id       Int      @id @default(autoincrement())
   nombre   String // ej. "Bloque C"
   creadoEn DateTime @default(now())
 
@@ -69,9 +70,9 @@ model Bloque {
 // (origen) hasta un Bloque (destino). Cada combinación QR-Bloque
 // debe tener como máximo una ruta cargada.
 model Ruta {
-  id            String @id @default(uuid())
-  qrId          String
-  bloqueId      String
+  id            Int    @id @default(autoincrement())
+  qrId          Int
+  bloqueId      Int
   instrucciones String // ej. "Camina hacia el Bloque C, sube al segundo piso, luego al tercero"
 
   qr     Qr     @relation(fields: [qrId], references: [id], onDelete: Cascade)
@@ -87,11 +88,11 @@ model Ruta {
 // El "nombre" es lo único editable por el admin (renombrar), y renombrarlo
 // no afecta ni la ruta del bloque ni la instrucción final.
 model Espacio {
-  id                String      @id @default(uuid())
+  id                Int         @id @default(autoincrement())
   nombre            String // ej. "C307" — editable por el admin
   tipo              TipoEspacio
   piso              Int // ej. 3 — permite filtrar espacios por piso dentro de un bloque
-  bloqueId          String
+  bloqueId          Int
   instruccionFinal  String // ej. "Segundo piso, tercera puerta a la derecha"
   creadoEn          DateTime    @default(now())
   actualizadoEn     DateTime    @updatedAt
@@ -100,4 +101,16 @@ model Espacio {
 
   @@index([bloqueId, piso])
   @@map("espacios")
+}
+
+// Registro de cada vez que alguien escanea un QR (para estadísticas futuras).
+model Escaneo {
+  id          Int      @id @default(autoincrement())
+  qrId        Int
+  escaneadoEn DateTime @default(now())
+
+  qr Qr @relation(fields: [qrId], references: [id], onDelete: Cascade)
+
+  @@index([qrId])
+  @@map("escaneos")
 }

@@ -1,7 +1,14 @@
 const express = require('express');
 const prisma = require('../prismaClient');
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
+
+// GET /api/qr   (protegido, uso del panel de administración)
+router.get('/', requireAuth, async (req, res) => {
+  const qrs = await prisma.qr.findMany({ orderBy: { nombre: 'asc' } });
+  res.json(qrs);
+});
 
 // GET /api/qr/:slug
 // Info del QR escaneado: su nombre y las rutas que salen de él hacia

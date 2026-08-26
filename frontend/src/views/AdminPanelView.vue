@@ -1,62 +1,20 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { api } from '../lib/api'
+import EspaciosTab from '../components/admin/EspaciosTab.vue'
+import BloquesTab from '../components/admin/BloquesTab.vue'
+import RutasTab from '../components/admin/RutasTab.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
 
-const espacios = ref([])
-const cargando = ref(true)
-const error = ref('')
-
-const editandoId = ref(null)
-const nombreEdicion = ref('')
-const guardando = ref(false)
-
-async function cargar() {
-  cargando.value = true
-  try {
-    const data = await api.buscarEspacios({})
-    espacios.value = data.resultados
-  } catch (err) {
-    error.value = err.message
-  } finally {
-    cargando.value = false
-  }
-}
-
-function empezarEdicion(espacio) {
-  editandoId.value = espacio.id
-  nombreEdicion.value = espacio.nombre
-}
-
-function cancelarEdicion() {
-  editandoId.value = null
-  nombreEdicion.value = ''
-}
-
-async function guardarNombre(espacio) {
-  if (!nombreEdicion.value.trim()) return
-  guardando.value = true
-  try {
-    await api.renombrarEspacio(espacio.id, nombreEdicion.value.trim(), auth.token)
-    espacio.nombre = nombreEdicion.value.trim()
-    cancelarEdicion()
-  } catch (err) {
-    error.value = err.message
-  } finally {
-    guardando.value = false
-  }
-}
+const pestañaActiva = ref('espacios')
 
 function salir() {
   auth.logout()
   router.push('/admin/login')
 }
-
-onMounted(cargar)
 </script>
 
 <template>
@@ -67,29 +25,21 @@ onMounted(cargar)
     </header>
 
     <main class="contenido">
-      <h1>Espacios</h1>
-      <p class="ayuda">Solo puedes cambiar el nombre. La ruta y el bloque no se ven afectados.</p>
+      <nav class="pestañas">
+        <button :class="{ activa: pestañaActiva === 'espacios' }" @click="pestañaActiva = 'espacios'">
+          Espacios
+        </button>
+        <button :class="{ activa: pestañaActiva === 'bloques' }" @click="pestañaActiva = 'bloques'">
+          Bloques
+        </button>
+        <button :class="{ activa: pestañaActiva === 'rutas' }" @click="pestañaActiva = 'rutas'">
+          Rutas
+        </button>
+      </nav>
 
-      <p v-if="error" class="error">{{ error }}</p>
-      <div v-if="cargando" class="estado">Cargando espacios…</div>
-
-      <ul v-else class="lista">
-        <li v-for="espacio in espacios" :key="espacio.id" class="fila">
-          <div class="info">
-            <span class="codigo">{{ espacio.nombre }}</span>
-            <span class="detalle">{{ espacio.bloque.nombre }} · Piso {{ espacio.piso }} · {{ espacio.tipo }}</span>
-          </div>
-
-          <div v-if="editandoId === espacio.id" class="edicion">
-            <input v-model="nombreEdicion" type="text" @keyup.enter="guardarNombre(espacio)" />
-            <button class="btn-guardar" :disabled="guardando" @click="guardarNombre(espacio)">
-              Guardar
-            </button>
-            <button class="btn-cancelar" @click="cancelarEdicion">Cancelar</button>
-          </div>
-          <button v-else class="btn-editar" @click="empezarEdicion(espacio)">Renombrar</button>
-        </li>
-      </ul>
+      <EspaciosTab v-if="pestañaActiva === 'espacios'" />
+      <BloquesTab v-else-if="pestañaActiva === 'bloques'" />
+      <RutasTab v-else-if="pestañaActiva === 'rutas'" />
     </main>
   </div>
 </template>
@@ -101,7 +51,7 @@ onMounted(cargar)
 
 .encabezado {
   background: var(--ng-navy);
-  color: var(--ng-cream);
+  color: white;
   padding: 1.1rem 1.5rem;
   display: flex;
   justify-content: space-between;
@@ -111,13 +61,13 @@ onMounted(cargar)
 .marca {
   font-family: var(--font-display);
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
 }
 
 .salir {
   background: none;
-  border: 1px solid rgba(245, 243, 237, 0.4);
-  color: var(--ng-cream);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: white;
   padding: 0.4rem 0.9rem;
   border-radius: 6px;
   cursor: pointer;
@@ -125,113 +75,31 @@ onMounted(cargar)
 }
 
 .contenido {
-  max-width: 720px;
+  max-width: 780px;
   margin: 0 auto;
-  padding: 2rem 1.5rem 3rem;
+  padding: 1.5rem 1.5rem 3rem;
 }
 
-.ayuda {
-  color: var(--ng-ink-soft);
-  margin-top: 0.3rem;
-  margin-bottom: 1.5rem;
-  font-size: 0.9rem;
-}
-
-.error {
-  color: var(--ng-danger);
-  margin-bottom: 1rem;
-}
-
-.lista {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.fila {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.85rem 1rem;
-  background: white;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  flex-wrap: wrap;
-}
-
-.info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.codigo {
-  font-family: var(--font-mono);
-  font-weight: 500;
-  background: var(--ng-navy);
-  color: var(--ng-amber);
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  width: fit-content;
-}
-
-.detalle {
-  font-size: 0.8rem;
-  color: var(--ng-ink-soft);
-}
-
-.btn-editar {
-  padding: 0.45rem 0.9rem;
-  border: 1px solid var(--ng-navy);
-  background: white;
-  color: var(--ng-navy);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.btn-editar:hover {
-  background: var(--ng-navy);
-  color: white;
-}
-
-.edicion {
+.pestañas {
   display: flex;
   gap: 0.5rem;
-  align-items: center;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--color-border);
 }
 
-.edicion input {
-  padding: 0.45rem 0.6rem;
-  border: 1px solid var(--ng-navy);
-  border-radius: 6px;
+.pestañas button {
+  padding: 0.6rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--ng-ink-soft);
+  font-weight: 600;
+  cursor: pointer;
   font-size: 0.9rem;
 }
 
-.btn-guardar {
-  padding: 0.45rem 0.8rem;
-  background: var(--ng-navy);
-  color: var(--ng-amber);
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.btn-cancelar {
-  padding: 0.45rem 0.8rem;
-  background: none;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.estado {
-  color: var(--ng-ink-soft);
-  padding: 1rem 0;
+.pestañas button.activa {
+  color: var(--ng-navy);
+  border-bottom-color: var(--ng-navy);
 }
 </style>

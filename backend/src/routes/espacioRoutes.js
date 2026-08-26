@@ -62,23 +62,68 @@ router.get('/', async (req, res) => {
   }
 });
 
-// PATCH /api/espacios/:id   (protegido)
-// Único campo editable por el admin: el nombre del espacio.
-router.patch('/:id', requireAuth, async (req, res) => {
-  const { nombre } = req.body;
+// POST /api/espacios   (protegido)
+router.post('/', requireAuth, async (req, res) => {
+  const { nombre, tipo, piso, bloqueId, instruccionFinal } = req.body;
 
-  if (!nombre || !nombre.trim()) {
+  if (!nombre || !tipo || piso === undefined || !bloqueId || !instruccionFinal) {
+    return res.status(400).json({ error: 'nombre, tipo, piso, bloqueId e instruccionFinal son obligatorios.' });
+  }
+
+  try {
+    const espacio = await prisma.espacio.create({
+      data: {
+        nombre: nombre.trim(),
+        tipo,
+        piso: Number(piso),
+        bloqueId,
+        instruccionFinal: instruccionFinal.trim(),
+      },
+      include: { bloque: true },
+    });
+    res.status(201).json(espacio);
+  } catch (error) {
+    console.error('Error en POST /espacios:', error);
+    res.status(500).json({ error: 'Error interno del servidor.' });
+  }
+});
+
+// PATCH /api/espacios/:id   (protegido)
+// Permite editar cualquier campo del espacio (nombre, tipo, piso,
+// bloque, instrucción final).
+router.patch('/:id', requireAuth, async (req, res) => {
+  const { nombre, tipo, piso, bloqueId, instruccionFinal } = req.body;
+
+  if (nombre !== undefined && !nombre.trim()) {
     return res.status(400).json({ error: 'El nombre no puede estar vacío.' });
   }
+
+  const data = {};
+  if (nombre !== undefined) data.nombre = nombre.trim();
+  if (tipo !== undefined) data.tipo = tipo;
+  if (piso !== undefined) data.piso = Number(piso);
+  if (bloqueId !== undefined) data.bloqueId = bloqueId;
+  if (instruccionFinal !== undefined) data.instruccionFinal = instruccionFinal.trim();
 
   try {
     const espacio = await prisma.espacio.update({
       where: { id: req.params.id },
-      data: { nombre: nombre.trim() },
+      data,
+      include: { bloque: true },
     });
     res.json(espacio);
   } catch (error) {
     console.error('Error en PATCH /espacios/:id:', error);
+    res.status(404).json({ error: 'Espacio no encontrado.' });
+  }
+});
+
+// DELETE /api/espacios/:id   (protegido)
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    await prisma.espacio.delete({ where: { id: req.params.id } });
+    res.status(204).send();
+  } catch (error) {
     res.status(404).json({ error: 'Espacio no encontrado.' });
   }
 });

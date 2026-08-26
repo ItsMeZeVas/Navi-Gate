@@ -16,16 +16,12 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   // --- Admin ---
-  // Cambia usuario y contraseña antes de usar esto en producción.
   const passwordHash = await bcrypt.hash("cambiar-esta-clave", 10);
 
   const admin = await prisma.admin.upsert({
     where: { usuario: "admin" },
     update: {},
-    create: {
-      usuario: "admin",
-      passwordHash,
-    },
+    create: { usuario: "admin", passwordHash },
   });
   console.log(`Admin listo: ${admin.usuario}`);
 
@@ -33,30 +29,20 @@ async function main() {
   const qrEntrada = await prisma.qr.upsert({
     where: { slug: "entrada-principal" },
     update: {},
-    create: {
-      slug: "entrada-principal",
-      nombre: "Entrada Principal",
-    },
+    create: { slug: "entrada-principal", nombre: "Entrada Principal" },
   });
 
   // --- Bloque de ejemplo ---
-  const bloqueC = await prisma.bloque.upsert({
-    where: { id: "bloque-c-seed" }, // id fijo solo para que upsert sea idempotente en el seed
-    update: {},
-    create: {
-      id: "bloque-c-seed",
-      nombre: "Bloque C",
-    },
-  });
+  // Como el id ahora es autoincremental (no se puede fijar a mano),
+  // buscamos por nombre para que el seed siga siendo idempotente.
+  let bloqueC = await prisma.bloque.findFirst({ where: { nombre: "Bloque C" } });
+  if (!bloqueC) {
+    bloqueC = await prisma.bloque.create({ data: { nombre: "Bloque C" } });
+  }
 
   // --- Ruta QR -> Bloque ---
   await prisma.ruta.upsert({
-    where: {
-      qrId_bloqueId: {
-        qrId: qrEntrada.id,
-        bloqueId: bloqueC.id,
-      },
-    },
+    where: { qrId_bloqueId: { qrId: qrEntrada.id, bloqueId: bloqueC.id } },
     update: {},
     create: {
       qrId: qrEntrada.id,
@@ -67,31 +53,35 @@ async function main() {
   });
 
   // --- Espacios dentro del Bloque C ---
-  await prisma.espacio.upsert({
-    where: { id: "espacio-c307-seed" },
-    update: {},
-    create: {
-      id: "espacio-c307-seed",
-      nombre: "C307",
-      tipo: "SALON",
-      piso: 3,
-      bloqueId: bloqueC.id,
-      instruccionFinal: "En el tercer piso, tercera puerta a la derecha.",
-    },
+  const c307 = await prisma.espacio.findFirst({
+    where: { nombre: "C307", bloqueId: bloqueC.id },
   });
+  if (!c307) {
+    await prisma.espacio.create({
+      data: {
+        nombre: "C307",
+        tipo: "SALON",
+        piso: 3,
+        bloqueId: bloqueC.id,
+        instruccionFinal: "En el tercer piso, tercera puerta a la derecha.",
+      },
+    });
+  }
 
-  await prisma.espacio.upsert({
-    where: { id: "espacio-cafeteria-c-seed" },
-    update: {},
-    create: {
-      id: "espacio-cafeteria-c-seed",
-      nombre: "Cafetería Bloque C",
-      tipo: "CAFETERIA",
-      piso: 1,
-      bloqueId: bloqueC.id,
-      instruccionFinal: "En el primer piso, al fondo a la izquierda.",
-    },
+  const cafeteria = await prisma.espacio.findFirst({
+    where: { nombre: "Cafetería Bloque C", bloqueId: bloqueC.id },
   });
+  if (!cafeteria) {
+    await prisma.espacio.create({
+      data: {
+        nombre: "Cafetería Bloque C",
+        tipo: "CAFETERIA",
+        piso: 1,
+        bloqueId: bloqueC.id,
+        instruccionFinal: "En el primer piso, al fondo a la izquierda.",
+      },
+    });
+  }
 
   console.log("Seed completado.");
 }
