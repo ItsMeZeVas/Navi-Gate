@@ -1,11 +1,12 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { api } from '../../lib/api'
 
 const auth = useAuthStore()
 const espacios = ref([])
 const bloques = ref([])
+const rutas = ref([])
 const cargando = ref(true)
 const error = ref('')
 
@@ -18,19 +19,53 @@ const creando = ref(false)
 const editandoId = ref(null)
 const edicion = ref(vacio())
 
+// Borradores de texto de las rutas que se están editando inline
+// (bloqueId -> { rutaId: textoEditado }).
+const borradoresRuta = ref({})
+const guardandoRutaId = ref(null)
+
+function rutasDelBloque(bloqueId) {
+  return rutas.value.filter((r) => r.bloqueId === bloqueId)
+}
+
 async function cargar() {
   cargando.value = true
   try {
-    const [data, bloquesData] = await Promise.all([
+    const [data, bloquesData, rutasData] = await Promise.all([
       api.buscarEspacios({}),
       api.listarBloques(auth.token),
+      api.listarRutas(auth.token),
     ])
     espacios.value = data.resultados
     bloques.value = bloquesData
+    rutas.value = rutasData
   } catch (err) {
     error.value = err.message
   } finally {
     cargando.value = false
+  }
+}
+
+function textoRuta(ruta) {
+  return borradoresRuta.value[ruta.id] ?? ruta.instrucciones
+}
+
+function actualizarBorrador(ruta, valor) {
+  borradoresRuta.value[ruta.id] = valor
+}
+
+async function guardarRuta(ruta) {
+  const texto = textoRuta(ruta)
+  if (!texto.trim()) return
+  guardandoRutaId.value = ruta.id
+  try {
+    await api.actualizarRuta(ruta.id, texto.trim(), auth.token)
+    delete borradoresRuta.value[ruta.id]
+    await cargar()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    guardandoRutaId.value = null
   }
 }
 
@@ -107,6 +142,28 @@ onMounted(cargar)
         />
       </div>
       <button type="submit" :disabled="creando">Agregar espacio</button>
+
+      <div v-if="nuevoEspacio.bloqueId" class="seccion-rutas">
+        <p class="titulo-rutas">Ruta(s) hacia este bloque</p>
+        <p v-if="rutasDelBloque(nuevoEspacio.bloqueId).length === 0" class="sin-rutas">
+          Este bloque todavía no tiene ninguna ruta cargada (créala en la pestaña "Rutas").
+        </p>
+        <div v-for="ruta in rutasDelBloque(nuevoEspacio.bloqueId)" :key="ruta.id" class="ruta-editable">
+          <span class="ruta-origen">Desde: {{ ruta.qr.nombre }}</span>
+          <textarea
+            :value="textoRuta(ruta)"
+            @input="actualizarBorrador(ruta, $event.target.value)"
+            rows="2"
+          ></textarea>
+          <button
+            class="btn-guardar-ruta"
+            :disabled="guardandoRutaId === ruta.id"
+            @click="guardarRuta(ruta)"
+          >
+            {{ guardandoRutaId === ruta.id ? 'Guardando…' : 'Guardar ruta' }}
+          </button>
+        </div>
+      </div>
     </form>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -131,6 +188,28 @@ onMounted(cargar)
           <div class="botones-edicion">
             <button class="btn-guardar" @click="guardarEdicion(espacio)">Guardar</button>
             <button class="btn-cancelar" @click="editandoId = null">Cancelar</button>
+          </div>
+
+          <div v-if="edicion.bloqueId" class="seccion-rutas">
+            <p class="titulo-rutas">Ruta(s) hacia este bloque</p>
+            <p v-if="rutasDelBloque(edicion.bloqueId).length === 0" class="sin-rutas">
+              Este bloque todavía no tiene ninguna ruta cargada.
+            </p>
+            <div v-for="ruta in rutasDelBloque(edicion.bloqueId)" :key="ruta.id" class="ruta-editable">
+              <span class="ruta-origen">Desde: {{ ruta.qr.nombre }}</span>
+              <textarea
+                :value="textoRuta(ruta)"
+                @input="actualizarBorrador(ruta, $event.target.value)"
+                rows="2"
+              ></textarea>
+              <button
+                class="btn-guardar-ruta"
+                :disabled="guardandoRutaId === ruta.id"
+                @click="guardarRuta(ruta)"
+              >
+                {{ guardandoRutaId === ruta.id ? 'Guardando…' : 'Guardar ruta' }}
+              </button>
+            </div>
           </div>
         </div>
         <template v-else>
@@ -284,5 +363,66 @@ onMounted(cargar)
 .botones-edicion {
   display: flex;
   gap: 0.4rem;
+}
+
+.seccion-rutas {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.titulo-rutas {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ng-ink-soft);
+}
+
+.sin-rutas {
+  font-size: 0.8rem;
+  color: var(--ng-ink-soft);
+  font-style: italic;
+}
+
+.ruta-editable {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.6rem;
+  background: var(--ng-accent-light);
+  border-radius: 6px;
+}
+
+.ruta-origen {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ng-navy);
+}
+
+.ruta-editable textarea {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.btn-guardar-ruta {
+  align-self: flex-start;
+  padding: 0.35rem 0.7rem;
+  background: var(--ng-navy);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.btn-guardar-ruta:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 </style>
