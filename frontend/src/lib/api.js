@@ -28,6 +28,10 @@ export const api = {
 
   getQr: (slug) => request(`/api/qr/${slug}`),
   listarQrs: (token) => request('/api/qr', { token }),
+  crearQr: (nombre, token) => request('/api/qr', { method: 'POST', body: { nombre }, token }),
+  actualizarQr: (id, nombre, token) =>
+    request(`/api/qr/${id}`, { method: 'PATCH', body: { nombre }, token }),
+  eliminarQr: (id, token) => request(`/api/qr/${id}`, { method: 'DELETE', token }),
 
   buscarEspacios: (params) => {
     const query = new URLSearchParams(params).toString()

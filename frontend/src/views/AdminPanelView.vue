@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth'
 import EspaciosTab from '../components/admin/EspaciosTab.vue'
 import BloquesTab from '../components/admin/BloquesTab.vue'
 import RutasTab from '../components/admin/RutasTab.vue'
+import QrsTab from '../components/admin/QrsTab.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -35,11 +36,15 @@ function salir() {
         <button :class="{ activa: pestañaActiva === 'rutas' }" @click="pestañaActiva = 'rutas'">
           Rutas
         </button>
+        <button :class="{ activa: pestañaActiva === 'qrs' }" @click="pestañaActiva = 'qrs'">
+          QRs
+        </button>
       </nav>
 
       <EspaciosTab v-if="pestañaActiva === 'espacios'" />
       <BloquesTab v-else-if="pestañaActiva === 'bloques'" />
       <RutasTab v-else-if="pestañaActiva === 'rutas'" />
+      <QrsTab v-else-if="pestañaActiva === 'qrs'" />
     </main>
   </div>
 </template>
