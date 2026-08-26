@@ -24,7 +24,7 @@ router.post('/', requireAuth, async (req, res) => {
 
   try {
     const ruta = await prisma.ruta.create({
-      data: { qrId, bloqueId, instrucciones: instrucciones.trim() },
+      data: { qrId: Number(qrId), bloqueId: Number(bloqueId), instrucciones: instrucciones.trim() },
       include: { qr: true, bloque: true },
     });
     res.status(201).json(ruta);
@@ -46,7 +46,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
   }
   try {
     const ruta = await prisma.ruta.update({
-      where: { id: req.params.id },
+      where: { id: Number(req.params.id) },
       data: { instrucciones: instrucciones.trim() },
       include: { qr: true, bloque: true },
     });
@@ -59,7 +59,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
 // DELETE /api/rutas/:id   (protegido)
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
-    await prisma.ruta.delete({ where: { id: req.params.id } });
+    await prisma.ruta.delete({ where: { id: Number(req.params.id) } });
     res.status(204).send();
   } catch (error) {
     res.status(404).json({ error: 'Ruta no encontrada.' });

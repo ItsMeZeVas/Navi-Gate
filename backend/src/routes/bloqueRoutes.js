@@ -31,7 +31,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
   }
   try {
     const bloque = await prisma.bloque.update({
-      where: { id: req.params.id },
+      where: { id: Number(req.params.id) },
       data: { nombre: nombre.trim() },
     });
     res.json(bloque);
@@ -44,7 +44,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
 // Ojo: borra en cascada sus Rutas y Espacios (definido en el schema).
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
-    await prisma.bloque.delete({ where: { id: req.params.id } });
+    await prisma.bloque.delete({ where: { id: Number(req.params.id) } });
     res.status(204).send();
   } catch (error) {
     res.status(404).json({ error: 'Bloque no encontrado.' });

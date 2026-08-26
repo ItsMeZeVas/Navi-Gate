@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
       where: {
         ...(piso ? { piso: Number(piso) } : {}),
         ...(tipo ? { tipo } : {}),
-        ...(bloqueId ? { bloqueId } : {}),
+        ...(bloqueId ? { bloqueId: Number(bloqueId) } : {}),
       },
       include: { bloque: true },
       orderBy: { nombre: 'asc' },
@@ -76,7 +76,7 @@ router.post('/', requireAuth, async (req, res) => {
         nombre: nombre.trim(),
         tipo,
         piso: Number(piso),
-        bloqueId,
+        bloqueId: Number(bloqueId),
         instruccionFinal: instruccionFinal.trim(),
       },
       include: { bloque: true },
@@ -102,12 +102,12 @@ router.patch('/:id', requireAuth, async (req, res) => {
   if (nombre !== undefined) data.nombre = nombre.trim();
   if (tipo !== undefined) data.tipo = tipo;
   if (piso !== undefined) data.piso = Number(piso);
-  if (bloqueId !== undefined) data.bloqueId = bloqueId;
+  if (bloqueId !== undefined) data.bloqueId = Number(bloqueId);
   if (instruccionFinal !== undefined) data.instruccionFinal = instruccionFinal.trim();
 
   try {
     const espacio = await prisma.espacio.update({
-      where: { id: req.params.id },
+      where: { id: Number(req.params.id) },
       data,
       include: { bloque: true },
     });
@@ -121,7 +121,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
 // DELETE /api/espacios/:id   (protegido)
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
-    await prisma.espacio.delete({ where: { id: req.params.id } });
+    await prisma.espacio.delete({ where: { id: Number(req.params.id) } });
     res.status(204).send();
   } catch (error) {
     res.status(404).json({ error: 'Espacio no encontrado.' });
