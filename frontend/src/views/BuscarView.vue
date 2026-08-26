@@ -70,6 +70,10 @@ watch(() => route.query, () => {
 
 <template>
   <div class="pagina">
+    <div v-if="session.qrNombre" class="chip-origen">
+      <span>Desde: {{ session.qrNombre }}</span>
+    </div>
+
     <div class="buscador">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="11" cy="11" r="7" />
@@ -116,6 +120,18 @@ watch(() => route.query, () => {
   padding: 1.25rem 1.25rem 1rem;
   max-width: 480px;
   margin: 0 auto;
+}
+
+.chip-origen {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.7rem;
+  background: var(--ng-accent-light);
+  color: var(--ng-navy);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-bottom: 0.85rem;
 }
 
 .buscador {

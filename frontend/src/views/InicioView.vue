@@ -1,8 +1,10 @@
 <script setup>
 import { useRouter } from 'vue-router'
+import { useSessionStore } from '../stores/session'
 import IconoPin from '../components/IconoPin.vue'
 
 const router = useRouter()
+const session = useSessionStore()
 </script>
 
 <template>
@@ -11,6 +13,11 @@ const router = useRouter()
       <IconoPin :size="20" />
       <span class="marca">NAVI-GATE</span>
     </header>
+
+    <div v-if="session.qrNombre" class="chip-origen">
+      <IconoPin :size="14" />
+      <span>Desde: {{ session.qrNombre }}</span>
+    </div>
 
     <h1>¿A dónde vamos?</h1>
     <p class="subtitulo">Explora el campus o busca un lugar.</p>
@@ -54,6 +61,19 @@ const router = useRouter()
 
 h1 {
   font-size: 1.6rem;
+}
+
+.chip-origen {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  background: var(--ng-accent-light);
+  color: var(--ng-navy);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
 }
 
 .subtitulo {
