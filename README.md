@@ -4,20 +4,32 @@ Herramienta web para guiar a estudiantes dentro del campus universitario a trav�
 
 Incluye un panel de administración con login (JWT) para renombrar espacios sin afectar las rutas cargadas.
 
-## Stack
-
-- **Frontend:** Vue 3 + Vite + Vue Router + Pinia
-- **Backend:** Node.js + Express + Prisma (ORM)
-- **Base de datos:** PostgreSQL
-- **Infraestructura:** Docker + Docker Compose
-
 ## Modelo de datos
 
 - **Qr** — punto físico donde está pegado un código QR (identificado por `slug` único en la URL, ej. `/qr/entrada-principal`).
 - **Bloque** — edificio o zona del campus. Agrupa uno o varios espacios.
-- **Ruta** — instrucciones de texto para llegar desde un `Qr` (origen) hasta un `Bloque` (destino). Una sola ruta por combinación QR-Bloque.
+- **Ruta** — instrucciones de texto para llegar desde un `Qr` (origen) hasta un `Bloque` **o** un `Espacio` (destino, nunca ambos). La mayoría se cargan a mano; también se pueden generar automáticamente desde el grafo de mapeo (ver abajo). Una sola ruta por combinación QR-Bloque, y una sola por combinación QR-Espacio.
 - **Espacio** — salón, oficina, laboratorio, cafetería, baño, etc. (`enum TipoEspacio`), con `nombre` editable por el admin, `piso`, e `instruccionFinal` (detalle dentro del bloque). Renombrar un espacio nunca afecta la ruta ni la instrucción final.
 - **Admin** — usuario del panel de administración. Se crea manualmente vía seed, sin registro público.
+- **NodoGrafo / EdgeGrafo** — grafo opcional de mapeo del campus (ver abajo). No afecta el modelo anterior si nunca se usa.
+
+## Grafo de mapeo (generación automática de rutas)
+
+Pestaña "Grafo" del panel admin: alternativa visual a escribir rutas a mano.
+
+- Cada `Qr`, `Bloque` y `Espacio` aparece como un nodo del grafo automáticamente (junto con las conexiones que ya existan: `Espacio → su Bloque`, y `Qr → Bloque` por cada `Ruta` manual ya cargada). El admin puede además agregar nodos intermedios (pasillo, escalera, ascensor, puerta, punto de referencia) y conectarlos arrastrando entre nodos.
+- Las escaleras y ascensores pueden abarcar un rango de piso (`piso` → `pisoHasta`) en un solo nodo.
+- El grafo es acumulativo: lo que el admin arma queda guardado y se sigue completando con el tiempo, no se reinicia cada vez.
+- Botón "Generar camino": calcula el camino más corto (menos saltos, BFS) entre un `Qr` de origen y un `Bloque` o `Espacio` de destino, y arma los pasos de texto automáticamente según el tipo de cada nodo del camino. Si el grafo no los conecta, no genera nada y muestra un error — nunca guarda una ruta incompleta.
+- Los pasos generados son editables antes y después de guardarse, igual que una ruta manual.
+- Si luego se borra un nodo o conexión que una ruta generada usó, esa ruta se marca como "desactualizada" (solo visible en el panel admin); guardar una edición sobre ella limpia la marca.
+
+## Stack
+
+- **Frontend:** Vue 3 + Vite + Vue Router + Pinia + Vue Flow (lienzo del grafo de mapeo)
+- **Backend:** Node.js + Express + Prisma (ORM)
+- **Base de datos:** PostgreSQL
+- **Infraestructura:** Docker + Docker Compose
 
 ## Cómo levantar el proyecto
 
@@ -31,13 +43,14 @@ Incluye un panel de administración con login (JWT) para renombrar espacios sin 
    ```
    npm run dev
    ```
-5. Instalar dependencias nuevas dentro del contenedor (solo la primera vez que agregues una dependencia, ej. bcrypt):
+5. Instalar dependencias nuevas dentro del contenedor (necesario tras traer este cambio, por Vue Flow en el frontend; en general, cada vez que se agregue una dependencia nueva):
    ```
    docker compose exec backend npm install
+   docker compose exec frontend npm install
    ```
-6. Crear la migración inicial y cargar los datos de ejemplo (el seed corre automáticamente tras la migración):
+6. Crear/actualizar la base de datos (aplica la migración del grafo de mapeo si vienes de una versión anterior; el seed corre automáticamente tras la migración inicial):
    ```
-   docker compose exec backend npx prisma migrate dev --name init_navigate
+   docker compose exec backend npx prisma migrate dev
    ```
 7. Abrir:
    - Frontend: http://localhost:5173
@@ -91,9 +104,4 @@ navigate-web/
 
 ## Próximos pasos (pendientes de implementar)
 
-- [ ] Endpoint `POST /api/admin/login` (JWT) + middleware de autenticación.
-- [ ] Endpoints públicos: `GET /api/qr/:slug`, `GET /api/espacios` (búsqueda + fuzzy search + filtro por piso), `GET /api/bloques`.
-- [ ] Vista pública de búsqueda (`/qr/:slug`) con autocompletado y navegación por bloque.
-- [ ] Vista de login y panel de administración protegido por JWT.
-- [ ] Fase 2: plano visual del piso con zona resaltada por espacio.
-- [ ] Fase 2: cálculo automático de rutas vía grafo de nodos, en vez de texto manual.
+- [ ] Fase 2: plano visual del piso con zona resaltada por espacio (el grafo de mapeo ya cubre la generación automática de rutas, ver arriba).

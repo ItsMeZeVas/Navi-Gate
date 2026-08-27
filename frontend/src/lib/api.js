@@ -57,6 +57,18 @@ export const api = {
     request(`/api/rutas/${id}`, { method: 'PATCH', body: { instrucciones, fotos }, token }),
   eliminarRuta: (id, token) => request(`/api/rutas/${id}`, { method: 'DELETE', token }),
 
+  // Grafo de mapeo (opción alternativa a crear rutas a mano).
+  obtenerGrafo: (token) => request('/api/grafo', { token }),
+  crearNodoGrafo: (datos, token) => request('/api/grafo/nodos', { method: 'POST', body: datos, token }),
+  actualizarNodoGrafo: (id, datos, token) =>
+    request(`/api/grafo/nodos/${id}`, { method: 'PATCH', body: datos, token }),
+  eliminarNodoGrafo: (id, token) => request(`/api/grafo/nodos/${id}`, { method: 'DELETE', token }),
+  crearEdgeGrafo: (origenId, destinoId, token) =>
+    request('/api/grafo/edges', { method: 'POST', body: { origenId, destinoId }, token }),
+  eliminarEdgeGrafo: (id, token) => request(`/api/grafo/edges/${id}`, { method: 'DELETE', token }),
+  generarRutaDesdeGrafo: (datos, token) =>
+    request('/api/grafo/generar-ruta', { method: 'POST', body: datos, token }),
+
   // Sube un archivo de imagen y devuelve su URL completa y accesible.
   subirFoto: async (archivo, token) => {
     const formData = new FormData()

@@ -9,6 +9,7 @@ const espacioRoutes = require('./routes/espacioRoutes');
 const bloqueRoutes = require('./routes/bloqueRoutes');
 const rutaRoutes = require('./routes/rutaRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const grafoRoutes = require('./routes/grafoRoutes');
 
 const app = express();
 app.use(express.json());
@@ -27,6 +28,7 @@ app.use('/api/espacios', espacioRoutes);
 app.use('/api/bloques', bloqueRoutes);
 app.use('/api/rutas', rutaRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/grafo', grafoRoutes);
 
 app.get('/api/admin/ping', requireAuth, (req, res) => {
   res.json({ mensaje: `Hola ${req.admin.usuario}, tu token es válido.` });

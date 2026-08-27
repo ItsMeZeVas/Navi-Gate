@@ -6,6 +6,7 @@ import EspaciosTab from '../components/admin/EspaciosTab.vue'
 import BloquesTab from '../components/admin/BloquesTab.vue'
 import RutasTab from '../components/admin/RutasTab.vue'
 import QrsTab from '../components/admin/QrsTab.vue'
+import GrafoTab from '../components/admin/GrafoTab.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -25,7 +26,7 @@ function salir() {
       <button class="salir" @click="salir">Salir</button>
     </header>
 
-    <main class="contenido">
+    <main class="contenido" :class="{ 'contenido--ancho': pestañaActiva === 'grafo' }">
       <nav class="pestañas">
         <button :class="{ activa: pestañaActiva === 'espacios' }" @click="pestañaActiva = 'espacios'">
           Espacios
@@ -39,12 +40,16 @@ function salir() {
         <button :class="{ activa: pestañaActiva === 'qrs' }" @click="pestañaActiva = 'qrs'">
           QRs
         </button>
+        <button :class="{ activa: pestañaActiva === 'grafo' }" @click="pestañaActiva = 'grafo'">
+          Grafo
+        </button>
       </nav>
 
       <EspaciosTab v-if="pestañaActiva === 'espacios'" />
       <BloquesTab v-else-if="pestañaActiva === 'bloques'" />
       <RutasTab v-else-if="pestañaActiva === 'rutas'" />
       <QrsTab v-else-if="pestañaActiva === 'qrs'" />
+      <GrafoTab v-else-if="pestañaActiva === 'grafo'" />
     </main>
   </div>
 </template>
@@ -83,6 +88,11 @@ function salir() {
   max-width: 780px;
   margin: 0 auto;
   padding: 1.5rem 1.5rem 3rem;
+  transition: max-width 0.15s ease;
+}
+
+.contenido--ancho {
+  max-width: 1080px;
 }
 
 .pestañas {

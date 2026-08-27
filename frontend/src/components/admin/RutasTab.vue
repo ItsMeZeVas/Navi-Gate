@@ -39,6 +39,12 @@ function agregarPaso(lista) {
   lista.push('')
 }
 
+// El destino de una ruta puede ser un Bloque (flujo manual de siempre)
+// o un Espacio puntual (normalmente generado desde el grafo de mapeo).
+function nombreDestino(ruta) {
+  return ruta.bloque?.nombre ?? ruta.espacio?.nombre ?? 'Destino eliminado'
+}
+
 function quitarPaso(lista, indice) {
   if (lista.length > 1) lista.splice(indice, 1)
 }
@@ -77,22 +83,30 @@ async function crear() {
   const pasosLimpios = nuevaRuta.value.pasos.map((p) => p.trim()).filter(Boolean)
   const fotosLimpias = nuevaRuta.value.fotos.map((f) => f.trim()).filter(Boolean)
   if (!nuevaRuta.value.qrId || !nuevaRuta.value.bloqueId || pasosLimpios.length === 0) return
+  const payloadBase = {
+    qrId: nuevaRuta.value.qrId,
+    bloqueId: nuevaRuta.value.bloqueId,
+    instrucciones: pasosLimpios,
+    fotos: fotosLimpias,
+  }
   creando.value = true
   error.value = ''
   try {
-    await api.crearRuta(
-      {
-        qrId: nuevaRuta.value.qrId,
-        bloqueId: nuevaRuta.value.bloqueId,
-        instrucciones: pasosLimpios,
-        fotos: fotosLimpias,
-      },
-      auth.token,
-    )
+    await api.crearRuta(payloadBase, auth.token)
     nuevaRuta.value = { qrId: '', bloqueId: '', pasos: [''], fotos: [] }
     await cargar()
   } catch (err) {
-    error.value = err.message
+    if (err.message.includes('Ya existe una ruta') && confirm('Ya existe una ruta para ese QR y ese destino. ¿Desea reemplazarla?')) {
+      try {
+        await api.crearRuta({ ...payloadBase, reemplazar: true }, auth.token)
+        nuevaRuta.value = { qrId: '', bloqueId: '', pasos: [''], fotos: [] }
+        await cargar()
+      } catch (err2) {
+        error.value = err2.message
+      }
+    } else if (!err.message.includes('Ya existe una ruta')) {
+      error.value = err.message
+    }
   } finally {
     creando.value = false
   }
@@ -118,7 +132,7 @@ async function guardarEdicion(ruta) {
 }
 
 async function eliminar(ruta) {
-  const confirmado = confirm(`¿Eliminar la ruta "${ruta.qr.nombre} → ${ruta.bloque.nombre}"?`)
+  const confirmado = confirm(`¿Eliminar la ruta "${ruta.qr.nombre} → ${nombreDestino(ruta)}"?`)
   if (!confirmado) return
   try {
     await api.eliminarRuta(ruta.id, auth.token)
@@ -231,7 +245,13 @@ onMounted(cargar)
         </div>
         <template v-else>
           <div class="info">
-            <span class="origen-destino">{{ ruta.qr.nombre }} → {{ ruta.bloque.nombre }}</span>
+            <span class="origen-destino">
+              {{ ruta.qr.nombre }} → {{ nombreDestino(ruta) }}
+              <span v-if="ruta.espacioId" class="etiqueta-nivel">espacio</span>
+            </span>
+            <span v-if="ruta.desactualizada" class="etiqueta-desactualizada">
+              ⚠ El mapa cambió desde que se generó esta ruta — revísala
+            </span>
             <ol class="lista-pasos">
               <li v-for="(paso, i) in ruta.instrucciones" :key="i">{{ paso }}</li>
             </ol>
@@ -434,6 +454,26 @@ onMounted(cargar)
 .origen-destino {
   font-weight: 600;
   font-size: 0.9rem;
+}
+
+.etiqueta-nivel {
+  font-weight: 600;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ng-navy);
+  background: var(--ng-accent-light);
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  margin-left: 0.3rem;
+  vertical-align: middle;
+}
+
+.etiqueta-desactualizada {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--ng-danger);
+  font-weight: 600;
 }
 
 .lista-pasos {

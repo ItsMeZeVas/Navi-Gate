@@ -41,7 +41,10 @@ function dibujarTodos() {
     if (canvas) {
       // Genera la imagen localmente: no depende de ningún servicio
       // externo, así que el código nunca expira ni deja de funcionar.
-      QRCode.toCanvas(canvas, urlDe(qr), { width: 160, margin: 1 })
+      // margin: 4 (el mínimo recomendado por el estándar QR) para que
+      // las cámaras lo reconozcan con confianza, sobre todo si se
+      // escanea desde una pantalla en vez de impreso.
+      QRCode.toCanvas(canvas, urlDe(qr), { width: 160, margin: 4 })
     }
   })
 }

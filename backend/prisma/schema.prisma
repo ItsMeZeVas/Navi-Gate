@@ -26,6 +26,21 @@ enum TipoEspacio {
   OTRO
 }
 
+// Tipos de nodo dentro del grafo de mapeo. QR, BLOQUE y ESPACIO
+// representan entidades que ya existen en el modelo (un nodo "ligado");
+// los demás son puntos intermedios que solo existen dentro del grafo,
+// para describir el recorrido físico real entre un QR y un destino.
+enum TipoNodoGrafo {
+  QR
+  BLOQUE
+  ESPACIO
+  PASILLO
+  ESCALERA
+  ASCENSOR
+  PUERTA
+  PUNTO_REFERENCIA
+}
+
 // Administrador del panel. Se crea manualmente (seed / consola),
 // no hay endpoint de registro público.
 model Admin {
@@ -50,6 +65,10 @@ model Qr {
   rutas Ruta[]
   escaneos Escaneo[]
 
+  // Nodo del grafo de mapeo ligado a este QR (1 a 1, opcional: solo
+  // existe una vez que el admin abrió la vista de grafo al menos una vez).
+  nodoGrafo NodoGrafo?
+
   @@map("qrs")
 }
 
@@ -63,25 +82,46 @@ model Bloque {
   espacios Espacio[]
   rutas    Ruta[]
 
+  // Nodo del grafo de mapeo ligado a este Bloque (ver Qr.nodoGrafo).
+  nodoGrafo NodoGrafo?
+
   @@map("bloques")
 }
 
-// Ruta manual: instrucciones de texto para llegar desde un QR
-// (origen) hasta un Bloque (destino). Cada combinación QR-Bloque
-// debe tener como máximo una ruta cargada.
+// Ruta: instrucciones de texto para llegar desde un QR (origen) hasta
+// un Bloque O un Espacio (destino) — nunca ambos a la vez. La mayoría
+// son manuales (bloqueId), tal como funcionaba desde el inicio; el
+// grafo de mapeo puede generar además rutas más específicas apuntando
+// directo a un Espacio, sin afectar las que ya apuntan a un Bloque.
+// Cada combinación QR-Bloque y QR-Espacio admite como máximo una ruta.
 model Ruta {
   id            Int      @id @default(autoincrement())
   qrId          Int
-  bloqueId      Int
+  bloqueId      Int? // destino a nivel bloque (flujo original)
+  espacioId     Int? // destino a nivel espacio puntual (generado desde el grafo)
   instrucciones String[] // lista de pasos, ej. ["Camina hacia el Bloque C.", "Sube al segundo piso."]
   fotos         String[] @default([]) // URLs de fotos de referencia del recorrido (opcional)
 
-  qr     Qr     @relation(fields: [qrId], references: [id], onDelete: Cascade)
-  bloque Bloque @relation(fields: [bloqueId], references: [id], onDelete: Cascade)
+  qr      Qr      @relation(fields: [qrId], references: [id], onDelete: Cascade)
+  bloque  Bloque? @relation(fields: [bloqueId], references: [id], onDelete: Cascade)
+  espacio Espacio? @relation(fields: [espacioId], references: [id], onDelete: Cascade)
+
+  // Snapshot de los ids de nodos/edges del grafo usados para generar esta
+  // ruta (vacío si se creó a mano). Sirve solo para detectar, en el panel
+  // admin, si el grafo cambió después y la ruta quedó desactualizada.
+  nodosGrafoUsados Int[]   @default([])
+  edgesGrafoUsados Int[]   @default([])
+  desactualizada   Boolean @default(false)
+
+  // Marca si ya se reflejó (una sola vez) como conexión Qr→Bloque en el
+  // grafo de mapeo. Es de una sola vía: una vez en true, el grafo nunca
+  // vuelve a recrear esa conexión aunque el admin la haya borrado a mano.
+  edgeGrafoSincronizado Boolean @default(false)
 
   creadoEn DateTime @default(now())
 
-  @@unique([qrId, bloqueId]) // una sola ruta por combinación origen-destino
+  @@unique([qrId, bloqueId]) // una sola ruta por combinación QR-Bloque
+  @@unique([qrId, espacioId]) // una sola ruta por combinación QR-Espacio
   @@map("rutas")
 }
 
@@ -101,6 +141,18 @@ model Espacio {
 
   bloque Bloque @relation(fields: [bloqueId], references: [id], onDelete: Cascade)
 
+  // Rutas generadas (normalmente desde el grafo) que apuntan directo a
+  // este espacio en vez de a su bloque. Ver Ruta.espacioId.
+  rutas Ruta[]
+
+  // Nodo del grafo de mapeo ligado a este Espacio (ver Qr.nodoGrafo).
+  nodoGrafo NodoGrafo?
+
+  // Igual que Ruta.edgeGrafoSincronizado, pero para la conexión implícita
+  // Espacio→Bloque (por pertenencia). Una sola vía: no se vuelve a crear
+  // sola si el admin la borra del grafo.
+  edgeGrafoSincronizado Boolean @default(false)
+
   @@index([bloqueId, piso])
   @@map("espacios")
 }
@@ -115,4 +167,61 @@ model Escaneo {
 
   @@index([qrId])
   @@map("escaneos")
+}
+
+// ---------------------------------------------------------
+// Grafo de mapeo — funcionalidad opcional del panel admin para
+// generar rutas automáticamente en vez de escribirlas a mano.
+// No reemplaza nada del modelo anterior: Qr, Bloque, Espacio y Ruta
+// siguen funcionando exactamente igual si nunca se usa el grafo.
+// ---------------------------------------------------------
+
+// Un nodo del grafo. Puede estar "ligado" a un Qr, Bloque o Espacio
+// ya existente (para que el grafo sepa cómo conectarlos), o ser un
+// punto intermedio puro (pasillo, escalera, ascensor, puerta, punto
+// de referencia) que solo existe para describir el recorrido físico.
+model NodoGrafo {
+  id       Int           @id @default(autoincrement())
+  tipo     TipoNodoGrafo
+  etiqueta String? // nombre del nodo; solo se usa para nodos intermedios.
+  // Para nodos ligados (QR/BLOQUE/ESPACIO) el nombre mostrado siempre
+  // se toma en vivo de la entidad relacionada, para no duplicar datos.
+
+  posX Float @default(0) // posición en el lienzo del panel admin
+  posY Float @default(0)
+
+  piso      Int? // piso donde está el nodo (null si no aplica)
+  pisoHasta Int? // solo para ESCALERA/ASCENSOR: piso al que se llega desde "piso"
+
+  qrId      Int? @unique
+  bloqueId  Int? @unique
+  espacioId Int? @unique
+
+  qr      Qr?      @relation(fields: [qrId], references: [id], onDelete: Cascade)
+  bloque  Bloque?  @relation(fields: [bloqueId], references: [id], onDelete: Cascade)
+  espacio Espacio? @relation(fields: [espacioId], references: [id], onDelete: Cascade)
+
+  edgesDesde EdgeGrafo[] @relation("EdgeOrigen")
+  edgesHacia EdgeGrafo[] @relation("EdgeDestino")
+
+  creadoEn DateTime @default(now())
+
+  @@map("nodos_grafo")
+}
+
+// Conexión (tramo caminable) entre dos nodos del grafo. Se trata como
+// bidireccional al calcular rutas (un pasillo se puede caminar en los
+// dos sentidos), aunque queda guardado un origen y un destino fijos.
+model EdgeGrafo {
+  id        Int @id @default(autoincrement())
+  origenId  Int
+  destinoId Int
+
+  origen  NodoGrafo @relation("EdgeOrigen", fields: [origenId], references: [id], onDelete: Cascade)
+  destino NodoGrafo @relation("EdgeDestino", fields: [destinoId], references: [id], onDelete: Cascade)
+
+  creadoEn DateTime @default(now())
+
+  @@unique([origenId, destinoId])
+  @@map("edges_grafo")
 }
