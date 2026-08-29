@@ -70,8 +70,18 @@ Pestaña "Estadísticas" del panel admin: cada vez que alguien abre la app desde
 
 ## Datos de ejemplo cargados por el seed
 
-- Admin: usuario `admin`, contraseña `cambiar-esta-clave` (cámbiala antes de producción).
+- Admin: usuario `admin`, contraseña `cambiar-esta-clave` (cámbiala antes de producción, ver abajo).
 - QR `entrada-principal` → Ruta hacia `Bloque C` → Espacios `C307` (piso 3) y `Cafetería Bloque C` (piso 1).
+
+## Cambiar la contraseña de un admin
+
+No hay opción en el panel web para esto (a propósito: cambiar contraseñas por un formulario web sin un flujo de verificación aparte es un riesgo innecesario para un proyecto de este tamaño). Se hace con un script desde la terminal:
+
+```
+docker compose exec backend node scripts/cambiar-password.js admin "mi-nueva-clave-segura"
+```
+
+Cambia `admin` por el usuario que quieras y pon la contraseña nueva entre comillas. Si el usuario no existe todavía, el script lo crea.
 
 ## Comandos disponibles
 
