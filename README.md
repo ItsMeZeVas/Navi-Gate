@@ -23,11 +23,23 @@ Pestaña "Grafo" del panel admin: alternativa visual a escribir rutas a mano.
 - Botón "Generar camino": calcula el camino más corto (menos saltos, BFS) entre un `Qr` de origen y un `Bloque` o `Espacio` de destino, y arma los pasos de texto automáticamente según el tipo de cada nodo del camino. Si el grafo no los conecta, no genera nada y muestra un error — nunca guarda una ruta incompleta.
 - Los pasos generados son editables antes y después de guardarse, igual que una ruta manual.
 - Si luego se borra un nodo o conexión que una ruta generada usó, esa ruta se marca como "desactualizada" (solo visible en el panel admin); guardar una edición sobre ella limpia la marca.
+- Un nodo o conexión que el admin borra a mano se queda borrado para siempre; el grafo nunca "revive" solo una conexión automática que ya fue borrada.
+- La pestaña incluye filtros puramente visuales (no tocan la base de datos): por tipo de nodo, y por QR (muestra solo lo alcanzable desde el QR elegido).
+
+## Estadísticas de escaneos
+
+Pestaña "Estadísticas" del panel admin: cada vez que alguien abre la app desde un QR (`GET /api/qr/:slug`), queda un registro en `Escaneo`. El panel muestra el total, los últimos 7/30 días, un gráfico simple de escaneos por día, y un ranking de los QRs más usados — útil para decidir dónde conviene agregar QRs nuevos. Es de solo lectura y no afecta el resto de la app; si el registro de un escaneo falla por lo que sea, no bloquea la respuesta al estudiante.
+
+## Preparar para producción
+
+- **URL de los QRs:** por defecto, cada QR se genera con la URL desde donde abriste el panel admin (`window.location.origin`), lo cual sirve para probar en desarrollo pero **no** para QRs impresos de verdad — `localhost` en tu computador no es lo mismo que `localhost` en el celular de un estudiante. Antes de imprimir QRs reales, define la variable de entorno `VITE_APP_URL` del frontend con tu dominio real (ver ejemplo comentado en `docker-compose.yml`). Mientras no la definas, la pestaña QRs del panel te avisa con un aviso amarillo si detecta que estás en `localhost` o una IP de red local.
+- **JWT_SECRET y contraseña de admin:** cambia ambos antes de exponer el proyecto fuera de tu red (ver sección "Cómo levantar el proyecto" abajo).
+- **Login con límite de intentos:** `POST /api/admin/login` está protegido con un límite de 10 intentos cada 15 minutos por IP, para dificultar ataques de fuerza bruta contra la contraseña.
 
 ## Stack
 
 - **Frontend:** Vue 3 + Vite + Vue Router + Pinia + Vue Flow (lienzo del grafo de mapeo)
-- **Backend:** Node.js + Express + Prisma (ORM)
+- **Backend:** Node.js + Express + Prisma (ORM) + express-rate-limit (límite de intentos de login)
 - **Base de datos:** PostgreSQL
 - **Infraestructura:** Docker + Docker Compose
 

@@ -75,6 +75,9 @@ router.delete('/:id', requireAuth, async (req, res) => {
 // GET /api/qr/:slug
 // Info del QR escaneado: su nombre y las rutas que salen de él hacia
 // cada bloque alcanzable (cada ruta trae el bloque y sus espacios).
+// Cada acceso queda registrado en Escaneo (solo para estadísticas del
+// panel admin); si ese registro falla por lo que sea, no debe tumbar
+// la respuesta real al estudiante que está intentando llegar a algún lado.
 router.get('/:slug', async (req, res) => {
   try {
     const qr = await prisma.qr.findUnique({
@@ -93,6 +96,10 @@ router.get('/:slug', async (req, res) => {
     if (!qr) {
       return res.status(404).json({ error: 'No encontramos ese punto de partida.' });
     }
+
+    prisma.escaneo.create({ data: { qrId: qr.id } }).catch((err) => {
+      console.error('No se pudo registrar el escaneo (no afecta la respuesta):', err);
+    });
 
     res.json(qr);
   } catch (error) {

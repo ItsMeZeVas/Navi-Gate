@@ -16,8 +16,13 @@ const editandoId = ref(null)
 const nombreEdicion = ref('')
 
 // URL pública a la que apunta cada QR (donde la persona cae al escanear).
+// Si se define VITE_APP_URL (recomendado en producción, ej. tu dominio
+// real), se usa esa; si no, cae a window.location.origin, que sirve para
+// probar en desarrollo pero NO sirve para QRs impresos: "localhost"
+// significa cosas distintas en tu computador y en el celular que escanea.
 function urlDe(qr) {
-  return `${window.location.origin}/qr/${qr.slug}`
+  const base = import.meta.env.VITE_APP_URL || window.location.origin
+  return `${base}/qr/${qr.slug}`
 }
 
 async function cargar() {
@@ -102,11 +107,24 @@ async function eliminar(qr) {
   }
 }
 
+// Aviso visible si vas a imprimir QRs apuntando a una URL que no va a
+// funcionar fuera de este computador (localhost / una IP privada de red).
+const origenActual = window.location.origin
+const baseUrlEsLocal = !import.meta.env.VITE_APP_URL && /^(localhost|127\.0\.0\.1|192\.168\.|10\.)/.test(
+  window.location.hostname,
+)
+
 onMounted(cargar)
 </script>
 
 <template>
   <div>
+    <p v-if="baseUrlEsLocal" class="aviso-local">
+      ⚠ Estás generando QRs con <code>{{ origenActual }}</code>. Sirve para probar desde este computador o red
+      local, pero un QR impreso con esta URL no funcionará desde fuera. Antes de imprimir de verdad, define
+      <code>VITE_APP_URL</code> con tu dominio real.
+    </p>
+
     <form class="form-nuevo" @submit.prevent="crear">
       <input v-model="nombreNuevo" type="text" placeholder="Nombre del punto, ej. Entrada del Bosque" />
       <button type="submit" :disabled="creando">Agregar QR</button>
@@ -172,6 +190,24 @@ onMounted(cargar)
 .error {
   color: var(--ng-danger);
   margin-bottom: 1rem;
+}
+
+.aviso-local {
+  font-size: 0.82rem;
+  color: #8a6d00;
+  background: #fff6da;
+  border: 1px solid #d8b400;
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.aviso-local code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
 }
 
 .estado {

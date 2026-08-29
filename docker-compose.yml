@@ -32,6 +32,11 @@ services:
       - backend
     ports:
       - "5173:5173"
+    # En producción, define VITE_APP_URL con tu dominio real (ej.
+    # https://navigate.tu-universidad.edu) para que los QRs generados
+    # apunten ahí y no a la URL desde donde abriste el panel admin.
+    # environment:
+    #   VITE_APP_URL: https://tu-dominio-real.com
     volumes:
       - ./frontend:/app
       - /app/node_modules

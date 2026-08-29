@@ -1,14 +1,26 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const prisma = require('../prismaClient');
 
 const router = express.Router();
 
+// Máximo 10 intentos de login por IP cada 15 minutos. No frena el uso
+// normal (un admin no falla 10 veces seguidas), solo dificulta la fuerza
+// bruta contra la contraseña.
+const limitadorLogin = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos. Espera unos minutos y vuelve a intentar.' },
+});
+
 // POST /api/admin/login
 // Recibe { usuario, password } y devuelve un JWT si son correctos.
 // No hay endpoint de registro: los admins se crean con el seed script.
-router.post('/login', async (req, res) => {
+router.post('/login', limitadorLogin, async (req, res) => {
   const { usuario, password } = req.body;
 
   if (!usuario || !password) {

@@ -69,6 +69,9 @@ export const api = {
   generarRutaDesdeGrafo: (datos, token) =>
     request('/api/grafo/generar-ruta', { method: 'POST', body: datos, token }),
 
+  // Estadísticas de escaneos (dashboard del panel admin).
+  obtenerResumenEscaneos: (token) => request('/api/escaneos/resumen', { token }),
+
   // Sube un archivo de imagen y devuelve su URL completa y accesible.
   subirFoto: async (archivo, token) => {
     const formData = new FormData()
