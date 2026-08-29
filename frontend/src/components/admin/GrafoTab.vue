@@ -25,6 +25,96 @@ const TIPOS_INTERMEDIOS = [
   { valor: 'PUNTO_REFERENCIA', etiqueta: 'Punto de referencia' },
 ]
 
+const TODOS_LOS_TIPOS = [
+  { valor: 'QR', etiqueta: 'QR' },
+  { valor: 'BLOQUE', etiqueta: 'Bloque' },
+  { valor: 'ESPACIO', etiqueta: 'Espacio' },
+  ...TIPOS_INTERMEDIOS,
+]
+
+// --- Filtro por tipo de nodo ---
+// Todos visibles por defecto; desmarcar un tipo lo oculta a él y a
+// cualquier conexión que dependa de un nodo oculto. No borra nada,
+// solo cambia qué se dibuja en el lienzo.
+const tiposVisibles = ref(Object.fromEntries(TODOS_LOS_TIPOS.map((t) => [t.valor, true])))
+
+function alternarTipo(tipo) {
+  tiposVisibles.value[tipo] = !tiposVisibles.value[tipo]
+  refrescarFlow()
+}
+
+function mostrarSoloTipo(tipo) {
+  TODOS_LOS_TIPOS.forEach((t) => {
+    tiposVisibles.value[t.valor] = t.valor === tipo
+  })
+  refrescarFlow()
+}
+
+function mostrarTodosLosTipos() {
+  TODOS_LOS_TIPOS.forEach((t) => {
+    tiposVisibles.value[t.valor] = true
+  })
+  refrescarFlow()
+}
+
+// --- Filtro por QR: solo lo alcanzable desde un QR elegido ---
+// No son solo sus vecinos directos: es todo el subgrafo conectado a
+// partir de ese QR (recorriendo pasillos, escaleras, etc.), que es lo
+// que realmente importa para saber a dónde puede llegar ese QR.
+const filtroQrId = ref('')
+
+function nodosAlcanzablesDesde(nodoInicioId) {
+  const adyacencia = new Map()
+  nodosOriginales.value.forEach((n) => adyacencia.set(n.id, []))
+  edgesOriginales.value.forEach((e) => {
+    adyacencia.get(e.origenId)?.push(e.destinoId)
+    adyacencia.get(e.destinoId)?.push(e.origenId)
+  })
+
+  const visitados = new Set([nodoInicioId])
+  const cola = [nodoInicioId]
+  while (cola.length > 0) {
+    const actual = cola.shift()
+    for (const vecino of adyacencia.get(actual) ?? []) {
+      if (!visitados.has(vecino)) {
+        visitados.add(vecino)
+        cola.push(vecino)
+      }
+    }
+  }
+  return visitados
+}
+
+function aplicarFiltroQr() {
+  refrescarFlow()
+}
+
+function quitarFiltroQr() {
+  filtroQrId.value = ''
+  refrescarFlow()
+}
+
+// Recalcula lo que se dibuja en el lienzo a partir de los datos
+// completos (nodosOriginales/edgesOriginales) y los filtros actuales
+// (por tipo y, opcionalmente, por QR). No borra ni cambia nada en la
+// base de datos, solo cambia qué se dibuja en el lienzo.
+function refrescarFlow() {
+  let idsVisibles = new Set(
+    nodosOriginales.value.filter((n) => tiposVisibles.value[n.tipo]).map((n) => n.id),
+  )
+
+  if (filtroQrId.value) {
+    const nodoQr = nodosOriginales.value.find((n) => n.qrId === Number(filtroQrId.value))
+    const alcanzables = nodoQr ? nodosAlcanzablesDesde(nodoQr.id) : new Set()
+    idsVisibles = new Set([...idsVisibles].filter((id) => alcanzables.has(id)))
+  }
+
+  nodosFlow.value = nodosOriginales.value.filter((n) => idsVisibles.has(n.id)).map(nodoAFlow)
+  edgesFlow.value = edgesOriginales.value
+    .filter((e) => idsVisibles.has(e.origenId) && idsVisibles.has(e.destinoId))
+    .map(edgeAFlow)
+}
+
 function nombreTipo(tipo) {
   const encontrado = TIPOS_INTERMEDIOS.find((t) => t.valor === tipo)
   if (encontrado) return encontrado.etiqueta
@@ -75,8 +165,7 @@ async function cargarGrafo() {
     const { nodos, edges } = await api.obtenerGrafo(auth.token)
     nodosOriginales.value = nodos
     edgesOriginales.value = edges
-    nodosFlow.value = nodos.map(nodoAFlow)
-    edgesFlow.value = edges.map(edgeAFlow)
+    refrescarFlow()
   } catch (err) {
     error.value = err.message
   } finally {
@@ -106,7 +195,7 @@ async function agregarNodo() {
       auth.token,
     )
     nodosOriginales.value.push(nodo)
-    nodosFlow.value.push(nodoAFlow(nodo))
+    refrescarFlow()
     nuevoNodo.value = { tipo: 'PASILLO', etiqueta: '', piso: '', pisoHasta: '' }
   } catch (err) {
     error.value = err.message
@@ -135,7 +224,7 @@ async function onConnect(conexion) {
   try {
     const edge = await api.crearEdgeGrafo(Number(conexion.source), Number(conexion.target), auth.token)
     edgesOriginales.value.push(edge)
-    edgesFlow.value.push(edgeAFlow(edge))
+    refrescarFlow()
   } catch (err) {
     error.value = err.message
   }
@@ -183,8 +272,7 @@ async function guardarEdicionNodo() {
     }
     const actualizado = await api.actualizarNodoGrafo(nodoSeleccionado.value.id, datos, auth.token)
     Object.assign(nodoSeleccionado.value, actualizado)
-    const idx = nodosFlow.value.findIndex((n) => n.id === String(nodoSeleccionado.value.id))
-    if (idx !== -1) nodosFlow.value[idx] = nodoAFlow(nodoSeleccionado.value)
+    refrescarFlow()
     deseleccionar()
   } catch (err) {
     error.value = err.message
@@ -203,9 +291,8 @@ async function eliminarNodoSeleccionado() {
     await api.eliminarNodoGrafo(nodoSeleccionado.value.id, auth.token)
     const id = nodoSeleccionado.value.id
     nodosOriginales.value = nodosOriginales.value.filter((n) => n.id !== id)
-    nodosFlow.value = nodosFlow.value.filter((n) => n.id !== String(id))
     edgesOriginales.value = edgesOriginales.value.filter((e) => e.origenId !== id && e.destinoId !== id)
-    edgesFlow.value = edgesFlow.value.filter((e) => e.source !== String(id) && e.target !== String(id))
+    refrescarFlow()
     deseleccionar()
   } catch (err) {
     error.value = err.message
@@ -219,7 +306,7 @@ async function eliminarEdgeSeleccionado() {
     await api.eliminarEdgeGrafo(edgeSeleccionado.value.id, auth.token)
     const id = edgeSeleccionado.value.id
     edgesOriginales.value = edgesOriginales.value.filter((e) => e.id !== id)
-    edgesFlow.value = edgesFlow.value.filter((e) => e.id !== String(id))
+    refrescarFlow()
     deseleccionar()
   } catch (err) {
     error.value = err.message
@@ -388,14 +475,32 @@ onMounted(async () => {
 
     <template v-else>
       <div class="leyenda">
-        <span class="chip nodo-tipo-qr">QR</span>
-        <span class="chip nodo-tipo-bloque">Bloque</span>
-        <span class="chip nodo-tipo-espacio">Espacio</span>
-        <span class="chip nodo-tipo-pasillo">Pasillo</span>
-        <span class="chip nodo-tipo-escalera">Escalera</span>
-        <span class="chip nodo-tipo-ascensor">Ascensor</span>
-        <span class="chip nodo-tipo-puerta">Puerta</span>
-        <span class="chip nodo-tipo-punto_referencia">Punto de referencia</span>
+        <span class="leyenda-titulo">Filtrar por tipo:</span>
+        <button
+          v-for="t in TODOS_LOS_TIPOS"
+          :key="t.valor"
+          type="button"
+          class="chip"
+          :class="[`nodo-tipo-${t.valor.toLowerCase()}`, { 'chip-apagado': !tiposVisibles[t.valor] }]"
+          :title="`Mostrar/ocultar solo ${t.etiqueta}`"
+          @click="alternarTipo(t.valor)"
+          @dblclick="mostrarSoloTipo(t.valor)"
+        >
+          {{ t.etiqueta }}
+        </button>
+        <button type="button" class="chip-reset" @click="mostrarTodosLosTipos">Mostrar todo</button>
+      </div>
+      <p class="ayuda-filtro">Clic para mostrar/ocultar un tipo. Doble clic para dejar solo ese tipo.</p>
+
+      <div class="filtro-qr">
+        <label>
+          Ver solo las conexiones de:
+          <select v-model="filtroQrId" @change="aplicarFiltroQr">
+            <option value="">Todos los QRs</option>
+            <option v-for="qr in qrs" :key="qr.id" :value="qr.id">{{ qr.nombre }}</option>
+          </select>
+        </label>
+        <button v-if="filtroQrId" type="button" class="chip-reset" @click="quitarFiltroQr">Quitar filtro</button>
       </div>
 
       <div class="lienzo-wrap">
@@ -578,15 +683,74 @@ onMounted(async () => {
 .leyenda {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.4rem;
+}
+
+.leyenda-titulo {
+  font-size: 0.75rem;
+  color: var(--ng-ink-soft);
+  font-weight: 600;
+  margin-right: 0.1rem;
 }
 
 .chip {
   font-size: 0.72rem;
   font-weight: 600;
-  padding: 0.2rem 0.6rem;
+  padding: 0.25rem 0.65rem;
   border-radius: 999px;
   color: white;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.chip:hover {
+  transform: translateY(-1px);
+}
+
+.chip-apagado {
+  opacity: 0.35;
+}
+
+.chip-reset {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--ng-ink-soft);
+  cursor: pointer;
+}
+
+.ayuda-filtro {
+  font-size: 0.72rem;
+  color: var(--ng-ink-soft);
+  margin-top: -0.2rem;
+}
+
+.filtro-qr {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.filtro-qr label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ng-ink-soft);
+}
+
+.filtro-qr select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: var(--ng-navy);
 }
 
 .lienzo-wrap {
