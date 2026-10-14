@@ -72,6 +72,20 @@ export const api = {
   // Estadísticas de escaneos (dashboard del panel admin).
   obtenerResumenEscaneos: (token) => request('/api/escaneos/resumen', { token }),
 
+  // Eventos (panel admin + burbuja de la pantalla de Inicio).
+  getEventosVigentes: (qrSlug) => request(`/api/eventos/vigentes?qr=${encodeURIComponent(qrSlug || '')}`),
+  listarEventos: (token) => request('/api/eventos', { token }),
+  crearEvento: (datos, token) => request('/api/eventos', { method: 'POST', body: datos, token }),
+  actualizarEvento: (id, datos, token) =>
+    request(`/api/eventos/${id}`, { method: 'PATCH', body: datos, token }),
+  eliminarEvento: (id, token) => request(`/api/eventos/${id}`, { method: 'DELETE', token }),
+  crearSubEvento: (eventoId, datos, token) =>
+    request(`/api/eventos/${eventoId}/sub-eventos`, { method: 'POST', body: datos, token }),
+  actualizarSubEvento: (id, datos, token) =>
+    request(`/api/eventos/sub-eventos/${id}`, { method: 'PATCH', body: datos, token }),
+  eliminarSubEvento: (id, token) =>
+    request(`/api/eventos/sub-eventos/${id}`, { method: 'DELETE', token }),
+
   // Sube un archivo de imagen y devuelve su URL completa y accesible.
   subirFoto: async (archivo, token) => {
     const formData = new FormData()

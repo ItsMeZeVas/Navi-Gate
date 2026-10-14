@@ -153,6 +153,9 @@ model Espacio {
   // sola si el admin la borra del grafo.
   edgeGrafoSincronizado Boolean @default(false)
 
+  // Sub-eventos que se realizan en este espacio (ver SubEvento).
+  subEventos SubEvento[]
+
   @@index([bloqueId, piso])
   @@map("espacios")
 }
@@ -224,4 +227,49 @@ model EdgeGrafo {
 
   @@unique([origenId, destinoId])
   @@map("edges_grafo")
+}
+
+// ---------------------------------------------------------
+// Eventos — anuncios administrables desde el panel (ej. "Día de la
+// Ingeniería Multimedia"). Se muestran en una burbuja en la pantalla
+// de Inicio de la app pública, solo mientras el evento está en curso.
+// Es independiente del resto del modelo: no afecta QRs, rutas ni grafo.
+// ---------------------------------------------------------
+
+model Evento {
+  id          Int      @id @default(autoincrement())
+  nombre      String
+  descripcion String   @default("")
+  imagen      String? // URL de la imagen (opcional)
+  inicio      DateTime
+  fin         DateTime
+  visible     Boolean  @default(true) // interruptor manual para ocultarlo
+  creadoEn    DateTime @default(now())
+
+  subEventos SubEvento[]
+
+  @@index([inicio, fin])
+  @@map("eventos")
+}
+
+// Una actividad dentro de un Evento, con su propio horario y su lugar
+// (un Espacio ya registrado, así "Cómo llegar" usa las rutas existentes).
+// Si el Espacio se elimina, el sub-evento se conserva pero queda sin lugar.
+model SubEvento {
+  id          Int      @id @default(autoincrement())
+  eventoId    Int
+  espacioId   Int?
+  nombre      String
+  descripcion String   @default("")
+  imagen      String?
+  inicio      DateTime
+  fin         DateTime
+  visible     Boolean  @default(true)
+  creadoEn    DateTime @default(now())
+
+  evento  Evento   @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  espacio Espacio? @relation(fields: [espacioId], references: [id], onDelete: SetNull)
+
+  @@index([eventoId])
+  @@map("sub_eventos")
 }

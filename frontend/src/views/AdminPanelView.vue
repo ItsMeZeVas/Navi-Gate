@@ -8,6 +8,7 @@ import RutasTab from '../components/admin/RutasTab.vue'
 import QrsTab from '../components/admin/QrsTab.vue'
 import GrafoTab from '../components/admin/GrafoTab.vue'
 import EscaneosTab from '../components/admin/EscaneosTab.vue'
+import EventosTab from '../components/admin/EventosTab.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -44,6 +45,9 @@ function salir() {
         <button :class="{ activa: pestañaActiva === 'grafo' }" @click="pestañaActiva = 'grafo'">
           Grafo
         </button>
+        <button :class="{ activa: pestañaActiva === 'eventos' }" @click="pestañaActiva = 'eventos'">
+          Eventos
+        </button>
         <button :class="{ activa: pestañaActiva === 'escaneos' }" @click="pestañaActiva = 'escaneos'">
           Estadísticas
         </button>
@@ -54,6 +58,7 @@ function salir() {
       <RutasTab v-else-if="pestañaActiva === 'rutas'" />
       <QrsTab v-else-if="pestañaActiva === 'qrs'" />
       <GrafoTab v-else-if="pestañaActiva === 'grafo'" />
+      <EventosTab v-else-if="pestañaActiva === 'eventos'" />
       <EscaneosTab v-else-if="pestañaActiva === 'escaneos'" />
     </main>
   </div>

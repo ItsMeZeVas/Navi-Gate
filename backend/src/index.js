@@ -11,6 +11,7 @@ const rutaRoutes = require('./routes/rutaRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const grafoRoutes = require('./routes/grafoRoutes');
 const escaneoRoutes = require('./routes/escaneoRoutes');
+const eventoRoutes = require('./routes/eventoRoutes');
 
 const app = express();
 app.use(express.json());
@@ -31,6 +32,7 @@ app.use('/api/rutas', rutaRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/grafo', grafoRoutes);
 app.use('/api/escaneos', escaneoRoutes);
+app.use('/api/eventos', eventoRoutes);
 
 app.get('/api/admin/ping', requireAuth, (req, res) => {
   res.json({ mensaje: `Hola ${req.admin.usuario}, tu token es válido.` });

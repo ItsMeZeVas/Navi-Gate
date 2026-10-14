@@ -2,6 +2,7 @@
 import { useRouter } from 'vue-router'
 import { useSessionStore } from '../stores/session'
 import IconoPin from '../components/IconoPin.vue'
+import BurbujaEventos from '../components/BurbujaEventos.vue'
 
 const router = useRouter()
 const session = useSessionStore()
@@ -35,6 +36,8 @@ const session = useSessionStore()
     </button>
 
     <div class="placeholder-mapa">Mapa del campus</div>
+
+    <BurbujaEventos />
   </div>
 </template>
 

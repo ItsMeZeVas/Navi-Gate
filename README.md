@@ -30,6 +30,18 @@ Pestaña "Grafo" del panel admin: alternativa visual a escribir rutas a mano.
 
 Pestaña "Estadísticas" del panel admin: cada vez que alguien abre la app desde un QR (`GET /api/qr/:slug`), queda un registro en `Escaneo`. El panel muestra el total, los últimos 7/30 días, un gráfico simple de escaneos por día, y un ranking de los QRs más usados — útil para decidir dónde conviene agregar QRs nuevos. Es de solo lectura y no afecta el resto de la app; si el registro de un escaneo falla por lo que sea, no bloquea la respuesta al estudiante.
 
+## Eventos
+
+Pestaña "Eventos" del panel admin: permite anunciar eventos del campus (ej. "Día de la Ingeniería Multimedia") que aparecen en una burbuja lateral en la pantalla de Inicio de la app pública.
+
+- Cada **evento** tiene nombre, descripción corta, imagen opcional, fecha/hora de inicio y fin, y un interruptor para ocultarlo a mano.
+- Cada evento puede tener **sub-eventos** con los mismos datos más su lugar: siempre un `Espacio` ya registrado.
+- La burbuja solo aparece si hay algún evento **en curso** (visible y entre su inicio y su fin). Al tocarla se abre un panel con los eventos y sus sub-eventos que aún no terminan, con hora y lugar.
+- Cada sub-evento muestra el botón "Cómo llegar" solo si, desde el QR por el que entró la persona, existe una ruta hasta ese espacio (ruta directa al espacio o ruta a su bloque). Si no existe, se muestra el lugar sin botón.
+- Las fechas se escriben en el panel con la hora de tu navegador y se guardan en UTC.
+- Si se elimina un `Espacio` usado por un sub-evento, el sub-evento se conserva pero queda sin lugar (el panel admin lo marca para que elijas otro).
+- Es independiente del resto: dos tablas nuevas (`Evento`, `SubEvento`) y no toca QRs, rutas ni el grafo.
+
 ## Preparar para producción
 
 - **URL de los QRs:** por defecto, cada QR se genera con la URL desde donde abriste el panel admin (`window.location.origin`), lo cual sirve para probar en desarrollo pero **no** para QRs impresos de verdad — `localhost` en tu computador no es lo mismo que `localhost` en el celular de un estudiante. Antes de imprimir QRs reales, define la variable de entorno `VITE_APP_URL` del frontend con tu dominio real (ver ejemplo comentado en `docker-compose.yml`). Mientras no la definas, la pestaña QRs del panel te avisa con un aviso amarillo si detecta que estás en `localhost` o una IP de red local.
