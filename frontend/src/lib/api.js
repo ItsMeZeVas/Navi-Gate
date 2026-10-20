@@ -100,6 +100,8 @@ export const api = {
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.error || 'No se pudo subir la imagen.')
 
-    return `${BASE_URL}${data.url}`
+    // Cloudinary devuelve una URL absoluta (https://...); el modo disco local,
+    // una ruta relativa (/uploads/...) que hay que completar con la del backend.
+    return /^https?:\/\//.test(data.url) ? data.url : `${BASE_URL}${data.url}`
   },
 }

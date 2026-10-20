@@ -42,6 +42,10 @@ Pestaña "Eventos" del panel admin: permite anunciar eventos del campus (ej. "D�
 - Si se elimina un `Espacio` usado por un sub-evento, el sub-evento se conserva pero queda sin lugar (el panel admin lo marca para que elijas otro).
 - Es independiente del resto: dos tablas nuevas (`Evento`, `SubEvento`) y no toca QRs, rutas ni el grafo.
 
+## Despliegue
+
+Guía paso a paso para publicarlo gratis (Neon + Render + Cloudinary + Vercel): ver [`DEPLOY.md`](DEPLOY.md). Variables de entorno de referencia en `backend/.env.example`.
+
 ## Preparar para producción
 
 - **URL de los QRs:** por defecto, cada QR se genera con la URL desde donde abriste el panel admin (`window.location.origin`), lo cual sirve para probar en desarrollo pero **no** para QRs impresos de verdad — `localhost` en tu computador no es lo mismo que `localhost` en el celular de un estudiante. Antes de imprimir QRs reales, define la variable de entorno `VITE_APP_URL` del frontend con tu dominio real (ver ejemplo comentado en `docker-compose.yml`). Mientras no la definas, la pestaña QRs del panel te avisa con un aviso amarillo si detecta que estás en `localhost` o una IP de red local.

@@ -10,6 +10,8 @@ export default defineConfig({
     seed: "node prisma/seed.js",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // En Neon, las migraciones deben usar la conexión directa (sin pooler);
+    // la app en runtime usa DATABASE_URL (con pooler). Local: solo DATABASE_URL.
+    url: process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"],
   },
 });

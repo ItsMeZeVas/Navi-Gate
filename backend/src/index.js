@@ -14,8 +14,21 @@ const escaneoRoutes = require('./routes/escaneoRoutes');
 const eventoRoutes = require('./routes/eventoRoutes');
 
 const app = express();
+
+// Detrás del proxy de Render/Vercel, sin esto el rate limit del login ve a
+// todos los usuarios como una sola IP y los bloquea juntos.
+app.set('trust proxy', 1);
+
 app.use(express.json());
-app.use(require('cors')());
+
+// FRONTEND_URL (opcional, varias separadas por coma) limita qué sitios
+// pueden llamar a la API desde un navegador. Si no se define (desarrollo
+// local), se permite cualquier origen, como hasta ahora.
+const origenesPermitidos = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map((url) => url.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+app.use(require('cors')(origenesPermitidos.length ? { origin: origenesPermitidos } : undefined));
 
 // Sirve las imágenes subidas (fotos de rutas y espacios) como archivos estáticos.
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
