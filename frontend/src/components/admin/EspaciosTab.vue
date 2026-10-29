@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { api } from '../../lib/api'
 
@@ -59,6 +59,87 @@ async function onArchivoSeleccionado(evento) {
     error.value = err.message
   } finally {
     subiendoFoto.value = false
+  }
+}
+
+// --- Crear varios espacios de una vez (por rango de números) ---
+const NOMBRE_BASE = {
+  SALON: 'Salón',
+  OFICINA: 'Oficina',
+  LABORATORIO: 'Laboratorio',
+  CAFETERIA: 'Cafetería',
+  BANO: 'Baño',
+  OTRO: 'Espacio',
+}
+const loteAbierto = ref(false)
+const lote = ref({ bloqueId: '', piso: '', tipo: 'SALON', prefijo: '', desde: '', hasta: '' })
+const creandoLote = ref(false)
+const mensajeLote = ref('')
+
+// "Bloque A" -> "A". Si el nombre del bloque no termina en una sigla corta
+// (ej. "Bloque Central"), el prefijo queda vacío para que lo escribas tú.
+function letraDelBloque(nombre) {
+  const ultima = (nombre || '').trim().split(/\s+/).pop() || ''
+  return ultima.length <= 2 ? ultima.toUpperCase() : ''
+}
+
+watch(
+  () => lote.value.bloqueId,
+  (id) => {
+    const bloque = bloques.value.find((b) => b.id === Number(id))
+    lote.value.prefijo = bloque ? letraDelBloque(bloque.nombre) : ''
+  },
+)
+
+const vistaPreviaLote = computed(() => {
+  const { bloqueId, tipo, prefijo, desde, hasta } = lote.value
+  if (!bloqueId || desde === '' || hasta === '') return null
+  const inicio = Number(desde)
+  const fin = Number(hasta)
+  if (!Number.isInteger(inicio) || !Number.isInteger(fin) || fin < inicio) {
+    return { error: '"Hasta" debe ser un número igual o mayor que "Desde".' }
+  }
+  if (fin - inicio + 1 > 200) return { error: 'Máximo 200 espacios por lote.' }
+
+  const existentes = new Set(
+    espacios.value.filter((e) => e.bloqueId === Number(bloqueId)).map((e) => e.nombre.trim().toLowerCase()),
+  )
+  const items = []
+  for (let n = inicio; n <= fin; n += 1) {
+    const nombre = `${NOMBRE_BASE[tipo]} ${prefijo.trim()}${n}`
+    items.push({ nombre, existe: existentes.has(nombre.toLowerCase()) })
+  }
+  return { items, nuevos: items.filter((i) => !i.existe).length }
+})
+
+async function crearLote() {
+  const vista = vistaPreviaLote.value
+  if (!vista?.items || vista.nuevos === 0 || lote.value.piso === '') return
+  creandoLote.value = true
+  error.value = ''
+  mensajeLote.value = ''
+  try {
+    const resultado = await api.crearEspaciosLote(
+      {
+        bloqueId: Number(lote.value.bloqueId),
+        piso: Number(lote.value.piso),
+        tipo: lote.value.tipo,
+        prefijo: lote.value.prefijo,
+        desde: Number(lote.value.desde),
+        hasta: Number(lote.value.hasta),
+      },
+      auth.token,
+    )
+    mensajeLote.value =
+      `Se crearon ${resultado.creados.length} espacio(s).` +
+      (resultado.omitidos.length ? ` Se saltaron ${resultado.omitidos.length} que ya existían.` : '')
+    lote.value.desde = ''
+    lote.value.hasta = ''
+    await cargar()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    creandoLote.value = false
   }
 }
 
@@ -166,6 +247,73 @@ onMounted(cargar)
 
 <template>
   <div>
+    <div class="lote">
+      <button v-if="!loteAbierto" type="button" class="btn-lote" @click="loteAbierto = true">
+        + Crear varios espacios (por rango)
+      </button>
+
+      <form v-else class="form-lote" @submit.prevent="crearLote">
+        <h3>Crear varios espacios</h3>
+        <p class="ayuda-lote">
+          Elige bloque, piso y tipo, y el rango de números. Ejemplo: bloque A, piso 2, del 201 al 215 crea "Salón
+          A201" hasta "Salón A215". Los que ya existan en ese bloque se saltan. Un piso por rango.
+        </p>
+        <div class="fila-form">
+          <select v-model="lote.bloqueId" required>
+            <option value="" disabled>Bloque…</option>
+            <option v-for="b in bloques" :key="b.id" :value="b.id">{{ b.nombre }}</option>
+          </select>
+          <input v-model.number="lote.piso" type="number" placeholder="Piso" required />
+          <select v-model="lote.tipo">
+            <option v-for="t in TIPOS" :key="t" :value="t">{{ t }}</option>
+          </select>
+        </div>
+        <div class="fila-form">
+          <input v-model="lote.prefijo" type="text" maxlength="6" placeholder="Prefijo, ej. A" />
+          <input v-model.number="lote.desde" type="number" min="0" placeholder="Desde, ej. 201" required />
+          <input v-model.number="lote.hasta" type="number" min="0" placeholder="Hasta, ej. 215" required />
+        </div>
+
+        <div v-if="vistaPreviaLote?.items" class="previa-lote">
+          <span class="resumen-lote">
+            Se crearán {{ vistaPreviaLote.nuevos }}
+            <template v-if="vistaPreviaLote.items.length - vistaPreviaLote.nuevos">
+              · {{ vistaPreviaLote.items.length - vistaPreviaLote.nuevos }} ya existen y se saltan
+            </template>
+          </span>
+          <div class="chips-lote">
+            <span
+              v-for="item in vistaPreviaLote.items.slice(0, 60)"
+              :key="item.nombre"
+              class="chip-lote"
+              :class="{ 'chip-lote--existe': item.existe }"
+            >
+              {{ item.nombre }}
+            </span>
+            <span v-if="vistaPreviaLote.items.length > 60" class="chip-lote chip-lote--mas">
+              …y {{ vistaPreviaLote.items.length - 60 }} más
+            </span>
+          </div>
+        </div>
+        <p v-else-if="vistaPreviaLote?.error" class="error">{{ vistaPreviaLote.error }}</p>
+
+        <p class="ayuda-lote">
+          Cada espacio se crea con la instrucción final "Piso N, nombre"; puedes editarla después, uno por uno.
+        </p>
+
+        <div class="acciones-lote">
+          <button
+            type="submit"
+            :disabled="creandoLote || !vistaPreviaLote?.items || vistaPreviaLote.nuevos === 0 || lote.piso === ''"
+          >
+            {{ creandoLote ? 'Creando…' : `Crear ${vistaPreviaLote?.nuevos ?? 0} espacio(s)` }}
+          </button>
+          <button type="button" class="btn-cerrar-lote" @click="loteAbierto = false">Cerrar</button>
+        </div>
+        <p v-if="mensajeLote" class="exito-lote">{{ mensajeLote }}</p>
+      </form>
+    </div>
+
     <form class="form-nuevo" @submit.prevent="crear">
       <div class="fila-form">
         <input v-model="nuevoEspacio.nombre" type="text" placeholder="Nombre, ej. D105" />
@@ -340,6 +488,127 @@ onMounted(cargar)
 </template>
 
 <style scoped>
+.lote {
+  margin-bottom: 1rem;
+}
+
+.btn-lote {
+  padding: 0.55rem 1rem;
+  background: var(--ng-accent-light);
+  color: var(--ng-navy);
+  border: none;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.form-lote {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.form-lote h3 {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--ng-navy);
+}
+
+.ayuda-lote {
+  font-size: 0.78rem;
+  color: var(--ng-ink-soft);
+  line-height: 1.45;
+}
+
+.form-lote select,
+.form-lote input {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-family: inherit;
+}
+
+.previa-lote {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem 0.7rem;
+  background: var(--ng-cream);
+  border-radius: 8px;
+}
+
+.resumen-lote {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ng-navy);
+}
+
+.chips-lote {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.chip-lote {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--ng-accent-light);
+  color: var(--ng-navy);
+}
+
+.chip-lote--existe {
+  background: var(--ng-cream-mute);
+  color: var(--ng-ink-soft);
+  text-decoration: line-through;
+}
+
+.chip-lote--mas {
+  background: none;
+  color: var(--ng-ink-soft);
+}
+
+.acciones-lote {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.acciones-lote button[type='submit'] {
+  padding: 0.55rem 1rem;
+  background: var(--ng-navy);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+.acciones-lote button[type='submit']:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-cerrar-lote {
+  padding: 0.55rem 1rem;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+.exito-lote {
+  color: var(--ng-navy);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
 .form-nuevo {
   display: flex;
   flex-direction: column;

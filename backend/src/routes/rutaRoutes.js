@@ -7,70 +7,91 @@ const router = express.Router();
 // GET /api/rutas   (protegido)
 router.get('/', requireAuth, async (req, res) => {
   const rutas = await prisma.ruta.findMany({
-    include: { qr: true, bloque: true, espacio: true },
+    include: { qr: true, bloque: true, espacio: true, nodoGrafo: true },
     orderBy: { creadoEn: 'desc' },
   });
   res.json(rutas);
 });
 
 // POST /api/rutas   (protegido)
-// Conecta un QR de origen con un Bloque O un Espacio de destino (nunca
-// ambos). El flujo manual de siempre solo manda bloqueId, igual que
-// antes; el grafo de mapeo puede mandar además espacioId, y opcionalmente
+// Conecta un QR de origen con UN destino: un Bloque, un Espacio o un punto
+// del grafo (nunca más de uno). El flujo manual de siempre solo manda
+// bloqueId, igual que antes; el grafo de mapeo puede mandar además
+// espacioId o nodoGrafoId, y opcionalmente
 // nodosGrafoUsados/edgesGrafoUsados (el "snapshot" del camino que usó
 // para generarla, solo para poder detectar después si quedó desactualizada).
 // Si ya existe una ruta para ese QR y ese destino, por defecto se rechaza
 // (409); si el body manda reemplazar:true, esa ruta existente se sobrescribe.
 router.post('/', requireAuth, async (req, res) => {
-  const { qrId, bloqueId, espacioId, instrucciones, fotos, nodosGrafoUsados, edgesGrafoUsados, reemplazar } =
-    req.body;
+  const {
+    qrId,
+    bloqueId,
+    espacioId,
+    nodoGrafoId,
+    instrucciones,
+    fotos,
+    nodosGrafoUsados,
+    edgesGrafoUsados,
+    reemplazar,
+  } = req.body;
 
   const pasos = Array.isArray(instrucciones)
     ? instrucciones.map((p) => p.trim()).filter(Boolean)
     : [];
   const listaFotos = Array.isArray(fotos) ? fotos.map((f) => f.trim()).filter(Boolean) : [];
 
-  if (!qrId || (!bloqueId && !espacioId) || (bloqueId && espacioId) || pasos.length === 0) {
+  const destinosIndicados = [bloqueId, espacioId, nodoGrafoId].filter(Boolean).length;
+  if (!qrId || destinosIndicados !== 1 || pasos.length === 0) {
     return res.status(400).json({
-      error: 'qrId, un destino (bloqueId o espacioId, no ambos) y al menos una instrucción son obligatorios.',
+      error:
+        'qrId, exactamente un destino (bloqueId, espacioId o nodoGrafoId) y al menos una instrucción son obligatorios.',
     });
   }
 
+  const snapshotNodos = Array.isArray(nodosGrafoUsados) ? nodosGrafoUsados.map(Number) : [];
   const datosComunes = {
     instrucciones: pasos,
     fotos: listaFotos,
-    nodosGrafoUsados: Array.isArray(nodosGrafoUsados) ? nodosGrafoUsados.map(Number) : [],
+    nodosGrafoUsados: snapshotNodos,
     edgesGrafoUsados: Array.isArray(edgesGrafoUsados) ? edgesGrafoUsados.map(Number) : [],
     desactualizada: false,
+    // Una ruta generada desde el grafo (trae el camino que usó) ya está
+    // reflejada en el grafo: no debe volver a "ofrecerse" como una conexión
+    // directa Qr→Bloque, que crearía un atajo falso en el mapa.
+    edgeGrafoSincronizado: snapshotNodos.length > 0,
+  };
+  const destino = {
+    bloqueId: bloqueId ? Number(bloqueId) : null,
+    espacioId: espacioId ? Number(espacioId) : null,
+    nodoGrafoId: nodoGrafoId ? Number(nodoGrafoId) : null,
   };
 
   try {
     let ruta;
     if (reemplazar) {
-      const whereUnico = bloqueId
-        ? { qrId_bloqueId: { qrId: Number(qrId), bloqueId: Number(bloqueId) } }
-        : { qrId_espacioId: { qrId: Number(qrId), espacioId: Number(espacioId) } };
+      let whereUnico;
+      if (bloqueId) whereUnico = { qrId_bloqueId: { qrId: Number(qrId), bloqueId: Number(bloqueId) } };
+      else if (espacioId) whereUnico = { qrId_espacioId: { qrId: Number(qrId), espacioId: Number(espacioId) } };
+      else whereUnico = { qrId_nodoGrafoId: { qrId: Number(qrId), nodoGrafoId: Number(nodoGrafoId) } };
 
       ruta = await prisma.ruta.upsert({
         where: whereUnico,
         create: {
           qrId: Number(qrId),
-          bloqueId: bloqueId ? Number(bloqueId) : null,
-          espacioId: espacioId ? Number(espacioId) : null,
+          ...destino,
           ...datosComunes,
         },
         update: datosComunes,
-        include: { qr: true, bloque: true, espacio: true },
+        include: { qr: true, bloque: true, espacio: true, nodoGrafo: true },
       });
     } else {
       ruta = await prisma.ruta.create({
         data: {
           qrId: Number(qrId),
-          bloqueId: bloqueId ? Number(bloqueId) : null,
-          espacioId: espacioId ? Number(espacioId) : null,
+          ...destino,
           ...datosComunes,
         },
-        include: { qr: true, bloque: true, espacio: true },
+        include: { qr: true, bloque: true, espacio: true, nodoGrafo: true },
       });
     }
     res.status(201).json(ruta);
@@ -108,7 +129,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
     const ruta = await prisma.ruta.update({
       where: { id: Number(req.params.id) },
       data,
-      include: { qr: true, bloque: true, espacio: true },
+      include: { qr: true, bloque: true, espacio: true, nodoGrafo: true },
     });
     res.json(ruta);
   } catch (error) {

@@ -69,6 +69,22 @@ export const api = {
   generarRutaDesdeGrafo: (datos, token) =>
     request('/api/grafo/generar-ruta', { method: 'POST', body: datos, token }),
 
+  // Generación masiva de rutas desde el grafo (previsualizar no escribe; aplicar sí).
+  previsualizarRutasMasivas: (datos, token) =>
+    request('/api/grafo/rutas-masivas/previsualizar', { method: 'POST', body: datos, token }),
+  aplicarRutasMasivas: (datos, token) =>
+    request('/api/grafo/rutas-masivas/aplicar', { method: 'POST', body: datos, token }),
+
+  // Crear varios espacios de una vez (rango de números en un bloque y piso).
+  crearEspaciosLote: (datos, token) =>
+    request('/api/espacios/lote', { method: 'POST', body: datos, token }),
+
+  // Puntos del grafo visibles en la app pública (puntos de referencia, ascensores…).
+  buscarPuntos: (params) => {
+    const query = new URLSearchParams(params).toString()
+    return request(`/api/puntos?${query}`)
+  },
+
   // Estadísticas de escaneos (dashboard del panel admin).
   obtenerResumenEscaneos: (token) => request('/api/escaneos/resumen', { token }),
 

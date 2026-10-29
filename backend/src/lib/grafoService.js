@@ -95,9 +95,14 @@ async function sincronizarGrafoBase() {
   }
 
   for (const ruta of rutasPendientes) {
+    // Una ruta generada desde el grafo (guarda el camino que usó) ya está
+    // reflejada en él: crear además una conexión directa Qr→Bloque metería
+    // un atajo falso que acortaría los caminos calculados después. Solo las
+    // rutas manuales (sin camino guardado) representan una conexión nueva.
+    const esManual = !ruta.nodosGrafoUsados || ruta.nodosGrafoUsados.length === 0;
     const nodoQr = nodoPorQr.get(ruta.qrId);
     const nodoBloque = nodoPorBloque.get(ruta.bloqueId);
-    if (nodoQr && nodoBloque) {
+    if (esManual && nodoQr && nodoBloque) {
       nuevosEdges.push({ origenId: nodoQr.id, destinoId: nodoBloque.id });
     }
     idsRutasSincronizadas.push(ruta.id);
@@ -147,35 +152,51 @@ async function obtenerGrafoCompleto() {
 // BFS: camino con menos saltos entre dos nodos, tratando los edges
 // como bidireccionales (un tramo caminable se recorre en ambos sentidos).
 // ---------------------------------------------------------------------
-function buscarCaminoMasCorto(nodos, edges, origenId, destinoId) {
+function construirAdyacencia(nodos, edges) {
   const adyacencia = new Map();
   for (const nodo of nodos) adyacencia.set(nodo.id, []);
   for (const edge of edges) {
     adyacencia.get(edge.origenId)?.push({ nodoId: edge.destinoId, edgeId: edge.id });
     adyacencia.get(edge.destinoId)?.push({ nodoId: edge.origenId, edgeId: edge.id });
   }
+  return adyacencia;
+}
 
-  const visitados = new Set([origenId]);
-  const cola = [{ nodoId: origenId, caminoNodos: [origenId], caminoEdges: [] }];
-
-  while (cola.length > 0) {
-    const actual = cola.shift();
-    if (actual.nodoId === destinoId) {
-      return { nodosUsados: actual.caminoNodos, edgesUsados: actual.caminoEdges };
-    }
-    for (const vecino of adyacencia.get(actual.nodoId) ?? []) {
-      if (!visitados.has(vecino.nodoId)) {
-        visitados.add(vecino.nodoId);
-        cola.push({
-          nodoId: vecino.nodoId,
-          caminoNodos: [...actual.caminoNodos, vecino.nodoId],
-          caminoEdges: [...actual.caminoEdges, vecino.edgeId],
-        });
+// Un solo recorrido BFS desde el origen que deja, para cada nodo alcanzable,
+// de dónde se llegó a él (así se obtienen los caminos a TODOS los destinos
+// sin repetir la búsqueda por cada uno).
+function arbolDeCaminos(adyacencia, origenId) {
+  const previo = new Map([[origenId, null]]);
+  const cola = [origenId];
+  for (let i = 0; i < cola.length; i += 1) {
+    const actual = cola[i];
+    for (const vecino of adyacencia.get(actual) ?? []) {
+      if (!previo.has(vecino.nodoId)) {
+        previo.set(vecino.nodoId, { nodoId: actual, edgeId: vecino.edgeId });
+        cola.push(vecino.nodoId);
       }
     }
   }
+  return previo;
+}
 
-  return null; // no hay camino conectado
+function reconstruirCamino(previo, origenId, destinoId) {
+  if (!previo.has(destinoId)) return null; // no hay camino conectado
+  const nodosUsados = [destinoId];
+  const edgesUsados = [];
+  let actual = destinoId;
+  while (actual !== origenId) {
+    const anterior = previo.get(actual);
+    edgesUsados.unshift(anterior.edgeId);
+    nodosUsados.unshift(anterior.nodoId);
+    actual = anterior.nodoId;
+  }
+  return { nodosUsados, edgesUsados };
+}
+
+function buscarCaminoMasCorto(nodos, edges, origenId, destinoId) {
+  const previo = arbolDeCaminos(construirAdyacencia(nodos, edges), origenId);
+  return reconstruirCamino(previo, origenId, destinoId);
 }
 
 // ---------------------------------------------------------------------
@@ -190,6 +211,14 @@ function generarInstrucciones(secuenciaNodos) {
   for (let i = 1; i < secuenciaNodos.length; i += 1) {
     const nodo = secuenciaNodos[i];
     const nombre = nodo.etiqueta;
+    const esDestino = i === secuenciaNodos.length - 1;
+
+    // Si el destino ES una escalera, un ascensor o un punto de referencia,
+    // la persona va a llegar hasta él (no a subir/bajar por él).
+    if (esDestino && ['ESCALERA', 'ASCENSOR', 'PUNTO_REFERENCIA'].includes(nodo.tipo)) {
+      pasos.push(`Llega a ${nombre}.`);
+      break;
+    }
 
     switch (nodo.tipo) {
       case 'ESCALERA':
@@ -273,6 +302,219 @@ async function generarRutaDesdeGrafo({ qrId, bloqueId, espacioId }) {
 }
 
 // ---------------------------------------------------------------------
+// Generación MASIVA de rutas: de uno o todos los QR hacia todos los
+// destinos (bloques, espacios y puntos del grafo marcados como visibles).
+// Se hace en dos pasos para que el admin decida antes de tocar nada:
+//   1) previsualizarRutasMasivas: calcula y reporta, sin escribir.
+//   2) aplicarRutasMasivas: escribe, respetando lo que el admin eligió.
+// ---------------------------------------------------------------------
+const ETIQUETA_TIPO_NODO = {
+  PUNTO_REFERENCIA: 'Punto de referencia',
+  ESCALERA: 'Escalera',
+  ASCENSOR: 'Ascensor',
+  PASILLO: 'Pasillo',
+  PUERTA: 'Puerta',
+};
+
+const claveRuta = (qrId, tipo, id) => `${qrId}:${tipo}:${id}`;
+
+function tipoYIdDeRuta(ruta) {
+  if (ruta.bloqueId) return { tipo: 'bloque', id: ruta.bloqueId };
+  if (ruta.espacioId) return { tipo: 'espacio', id: ruta.espacioId };
+  return { tipo: 'nodo', id: ruta.nodoGrafoId };
+}
+
+function listarDestinos(nodos) {
+  const nodoDeBloque = new Map(nodos.filter((n) => n.bloqueId).map((n) => [n.bloqueId, n]));
+  const destinos = [];
+  for (const nodo of nodos) {
+    if (nodo.bloqueId) {
+      destinos.push({ tipo: 'bloque', id: nodo.bloqueId, nodoId: nodo.id, nombre: nodo.etiqueta, detalle: 'Bloque' });
+    } else if (nodo.espacioId) {
+      const bloque = nodoDeBloque.get(nodo.espacio?.bloqueId);
+      destinos.push({
+        tipo: 'espacio',
+        id: nodo.espacioId,
+        nodoId: nodo.id,
+        nombre: nodo.etiqueta,
+        detalle: bloque ? bloque.etiqueta : 'Espacio',
+      });
+    } else if (!nodo.qrId && nodo.visibleEnApp) {
+      destinos.push({
+        tipo: 'nodo',
+        id: nodo.id,
+        nodoId: nodo.id,
+        nombre: nodo.etiqueta,
+        detalle: ETIQUETA_TIPO_NODO[nodo.tipo] ?? 'Punto',
+      });
+    }
+  }
+  return destinos;
+}
+
+const mismasInstrucciones = (a, b) =>
+  a.length === b.length && a.every((paso, i) => paso.trim() === (b[i] ?? '').trim());
+
+async function calcularPlanRutasMasivas({ qrIds }) {
+  const { nodos, edges } = await obtenerGrafoCompleto();
+  const adyacencia = construirAdyacencia(nodos, edges);
+  const nodosPorId = new Map(nodos.map((n) => [n.id, n]));
+  const destinos = listarDestinos(nodos);
+  const nodosQr = nodos.filter((n) => n.qrId && (!qrIds || qrIds.includes(n.qrId)));
+
+  const existentes = await prisma.ruta.findMany({
+    where: qrIds ? { qrId: { in: qrIds } } : {},
+    select: { id: true, qrId: true, bloqueId: true, espacioId: true, nodoGrafoId: true, instrucciones: true },
+  });
+  const existentePorClave = new Map(
+    existentes.map((r) => {
+      const { tipo, id } = tipoYIdDeRuta(r);
+      return [claveRuta(r.qrId, tipo, id), r];
+    }),
+  );
+
+  const items = [];
+  const sinCamino = [];
+
+  for (const nodoQr of nodosQr) {
+    const previo = arbolDeCaminos(adyacencia, nodoQr.id);
+    const inalcanzables = [];
+
+    for (const destino of destinos) {
+      const camino = reconstruirCamino(previo, nodoQr.id, destino.nodoId);
+      if (!camino) {
+        inalcanzables.push({ tipo: destino.tipo, nombre: destino.nombre, detalle: destino.detalle });
+        continue;
+      }
+
+      const instrucciones = generarInstrucciones(camino.nodosUsados.map((id) => nodosPorId.get(id)));
+      const clave = claveRuta(nodoQr.qrId, destino.tipo, destino.id);
+      const existente = existentePorClave.get(clave) ?? null;
+
+      let estado = 'nueva';
+      if (existente) estado = mismasInstrucciones(existente.instrucciones, instrucciones) ? 'igual' : 'conflicto';
+
+      items.push({
+        clave,
+        estado,
+        qrId: nodoQr.qrId,
+        qrNombre: nodoQr.etiqueta,
+        destino,
+        instrucciones,
+        nodosUsados: camino.nodosUsados,
+        edgesUsados: camino.edgesUsados,
+        existente,
+      });
+    }
+
+    if (inalcanzables.length > 0) {
+      sinCamino.push({ qrId: nodoQr.qrId, qrNombre: nodoQr.etiqueta, destinos: inalcanzables });
+    }
+  }
+
+  return { items, sinCamino, totalQrs: nodosQr.length, totalDestinos: destinos.length };
+}
+
+async function previsualizarRutasMasivas({ qrIds }) {
+  const plan = await calcularPlanRutasMasivas({ qrIds });
+  const cuenta = (estado) => plan.items.filter((i) => i.estado === estado).length;
+
+  return {
+    resumen: {
+      qrs: plan.totalQrs,
+      destinos: plan.totalDestinos,
+      nuevas: cuenta('nueva'),
+      iguales: cuenta('igual'),
+      conflictos: cuenta('conflicto'),
+      sinCamino: plan.sinCamino.reduce((total, q) => total + q.destinos.length, 0),
+    },
+    conflictos: plan.items
+      .filter((i) => i.estado === 'conflicto')
+      .map((i) => ({
+        clave: i.clave,
+        qrNombre: i.qrNombre,
+        destino: { tipo: i.destino.tipo, nombre: i.destino.nombre, detalle: i.destino.detalle },
+        existente: i.existente.instrucciones,
+        nueva: i.instrucciones,
+      })),
+    sinCamino: plan.sinCamino,
+  };
+}
+
+function datosDeRutaNueva(item) {
+  return {
+    qrId: item.qrId,
+    bloqueId: item.destino.tipo === 'bloque' ? item.destino.id : null,
+    espacioId: item.destino.tipo === 'espacio' ? item.destino.id : null,
+    nodoGrafoId: item.destino.tipo === 'nodo' ? item.destino.id : null,
+    instrucciones: item.instrucciones,
+    fotos: [],
+    nodosGrafoUsados: item.nodosUsados,
+    edgesGrafoUsados: item.edgesUsados,
+    desactualizada: false,
+    edgeGrafoSincronizado: true,
+  };
+}
+
+function enLotes(lista, tamano) {
+  const lotes = [];
+  for (let i = 0; i < lista.length; i += tamano) lotes.push(lista.slice(i, i + tamano));
+  return lotes;
+}
+
+// "reemplazar": claves (qrId:tipo:id) de las rutas existentes que el admin
+// eligió reemplazar. Se crean todas las rutas nuevas; una ruta que ya existía
+// y es distinta SOLO se toca si su clave viene en "reemplazar" (así, nada que
+// el admin no haya visto en la vista previa se sobrescribe). Las idénticas
+// no se tocan.
+async function aplicarRutasMasivas({ qrIds, reemplazar = [] }) {
+  const plan = await calcularPlanRutasMasivas({ qrIds });
+  const aReemplazar = new Set(reemplazar);
+
+  const nuevas = [];
+  const reemplazos = [];
+  let conservadas = 0;
+  for (const item of plan.items) {
+    if (item.estado === 'nueva') nuevas.push(item);
+    else if (item.estado === 'conflicto') {
+      if (aReemplazar.has(item.clave)) reemplazos.push(item);
+      else conservadas += 1;
+    }
+  }
+
+  for (const lote of enLotes(nuevas, 500)) {
+    await prisma.ruta.createMany({ data: lote.map(datosDeRutaNueva), skipDuplicates: true });
+  }
+
+  // Al reemplazar se actualiza solo el recorrido: las fotos que la ruta
+  // existente ya tuviera se conservan.
+  for (const lote of enLotes(reemplazos, 100)) {
+    await prisma.$transaction(
+      lote.map((item) =>
+        prisma.ruta.update({
+          where: { id: item.existente.id },
+          data: {
+            instrucciones: item.instrucciones,
+            nodosGrafoUsados: item.nodosUsados,
+            edgesGrafoUsados: item.edgesUsados,
+            desactualizada: false,
+            edgeGrafoSincronizado: true,
+          },
+        }),
+      ),
+    );
+  }
+
+  return {
+    creadas: nuevas.length,
+    reemplazadas: reemplazos.length,
+    conservadas,
+    iguales: plan.items.filter((i) => i.estado === 'igual').length,
+    sinCamino: plan.sinCamino,
+  };
+}
+
+// ---------------------------------------------------------------------
 // Marca como desactualizadas las rutas que usaron un nodo o edge que
 // está por eliminarse. Se llama antes de borrar en las rutas del grafo.
 // ---------------------------------------------------------------------
@@ -293,6 +535,14 @@ async function marcarRutasDesactualizadasPorEdge(edgeId) {
 module.exports = {
   obtenerGrafoCompleto,
   generarRutaDesdeGrafo,
+  previsualizarRutasMasivas,
+  aplicarRutasMasivas,
+  // Internos, expuestos para pruebas:
+  arbolDeCaminos,
+  reconstruirCamino,
+  construirAdyacencia,
+  generarInstrucciones,
+  sincronizarGrafoBase,
   marcarRutasDesactualizadasPorNodo,
   marcarRutasDesactualizadasPorEdge,
 };

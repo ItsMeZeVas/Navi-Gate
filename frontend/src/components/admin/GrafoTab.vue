@@ -1,10 +1,11 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import { useAuthStore } from '../../stores/auth'
 import { api } from '../../lib/api'
+import GenerarRutasMasivas from './GenerarRutasMasivas.vue'
 
 const auth = useAuthStore()
 const { zoomIn, zoomOut, fitView } = useVueFlow()
@@ -174,7 +175,16 @@ async function cargarGrafo() {
 }
 
 // --- Agregar nodo intermedio ---
-const nuevoNodo = ref({ tipo: 'PASILLO', etiqueta: '', piso: '', pisoHasta: '' })
+// Por defecto son visibles en la app los puntos que alguien querría encontrar;
+// los pasillos y las puertas son solo paradas del camino.
+const VISIBLES_POR_DEFECTO = ['PUNTO_REFERENCIA', 'ESCALERA', 'ASCENSOR']
+const nuevoNodo = ref({ tipo: 'PASILLO', etiqueta: '', piso: '', pisoHasta: '', visibleEnApp: false })
+watch(
+  () => nuevoNodo.value.tipo,
+  (tipo) => {
+    nuevoNodo.value.visibleEnApp = VISIBLES_POR_DEFECTO.includes(tipo)
+  },
+)
 const creandoNodo = ref(false)
 const esVertical = computed(() => nuevoNodo.value.tipo === 'ESCALERA' || nuevoNodo.value.tipo === 'ASCENSOR')
 
@@ -189,6 +199,7 @@ async function agregarNodo() {
         etiqueta: nuevoNodo.value.etiqueta.trim(),
         piso: nuevoNodo.value.piso === '' ? null : Number(nuevoNodo.value.piso),
         pisoHasta: esVertical.value && nuevoNodo.value.pisoHasta !== '' ? Number(nuevoNodo.value.pisoHasta) : null,
+        visibleEnApp: nuevoNodo.value.visibleEnApp,
         posX: 80 + Math.random() * 300,
         posY: 80 + Math.random() * 300,
       },
@@ -196,7 +207,7 @@ async function agregarNodo() {
     )
     nodosOriginales.value.push(nodo)
     refrescarFlow()
-    nuevoNodo.value = { tipo: 'PASILLO', etiqueta: '', piso: '', pisoHasta: '' }
+    nuevoNodo.value = { tipo: 'PASILLO', etiqueta: '', piso: '', pisoHasta: '', visibleEnApp: false }
   } catch (err) {
     error.value = err.message
   } finally {
@@ -233,7 +244,7 @@ async function onConnect(conexion) {
 // --- Selección de nodo / edge para editar o eliminar ---
 const nodoSeleccionado = ref(null)
 const edgeSeleccionado = ref(null)
-const edicionNodo = ref({ etiqueta: '', piso: '', pisoHasta: '' })
+const edicionNodo = ref({ etiqueta: '', piso: '', pisoHasta: '', visibleEnApp: false })
 
 function onNodeClick({ node }) {
   edgeSeleccionado.value = null
@@ -243,6 +254,7 @@ function onNodeClick({ node }) {
       etiqueta: nodoSeleccionado.value.etiqueta || '',
       piso: nodoSeleccionado.value.piso ?? '',
       pisoHasta: nodoSeleccionado.value.pisoHasta ?? '',
+      visibleEnApp: Boolean(nodoSeleccionado.value.visibleEnApp),
     }
   }
 }
@@ -269,6 +281,7 @@ async function guardarEdicionNodo() {
       datos.etiqueta = edicionNodo.value.etiqueta.trim()
       datos.piso = edicionNodo.value.piso === '' ? null : Number(edicionNodo.value.piso)
       datos.pisoHasta = edicionNodo.value.pisoHasta === '' ? null : Number(edicionNodo.value.pisoHasta)
+      datos.visibleEnApp = edicionNodo.value.visibleEnApp
     }
     const actualizado = await api.actualizarNodoGrafo(nodoSeleccionado.value.id, datos, auth.token)
     Object.assign(nodoSeleccionado.value, actualizado)
@@ -467,6 +480,9 @@ onMounted(async () => {
         type="number"
         placeholder="Piso hasta (ej. 3)"
       />
+      <label class="check-visible" title="Si está activo, se puede buscar en la app y reciben rutas generadas">
+        <input v-model="nuevoNodo.visibleEnApp" type="checkbox" /> Visible en la app
+      </label>
       <button type="submit" :disabled="creandoNodo">+ Agregar punto al mapa</button>
     </form>
 
@@ -540,6 +556,10 @@ onMounted(async () => {
               type="number"
               placeholder="Piso hasta"
             />
+            <label class="check-visible">
+              <input v-model="edicionNodo.visibleEnApp" type="checkbox" /> Visible en la app
+            </label>
+            <p class="panel-nota">Visible = se puede buscar en la app pública y el generador masivo le crea rutas.</p>
           </template>
           <div class="panel-acciones">
             <button v-if="!esNodoLigado(nodoSeleccionado)" class="btn-guardar" @click="guardarEdicionNodo">
@@ -617,6 +637,8 @@ onMounted(async () => {
         </button>
       </div>
     </div>
+
+    <GenerarRutasMasivas :qrs="qrs" />
   </div>
 </template>
 
@@ -677,6 +699,14 @@ onMounted(async () => {
 }
 
 .estado {
+  color: var(--ng-ink-soft);
+}
+
+.check-visible {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
   color: var(--ng-ink-soft);
 }
 

@@ -9,7 +9,10 @@ const route = useRoute()
 const router = useRouter()
 const session = useSessionStore()
 
+// La misma pantalla sirve para un Espacio y para un punto del grafo
+// (punto de referencia, ascensor…): "espacio" guarda el destino en ambos casos.
 const espacio = ref(null)
+const esPunto = Boolean(route.params.puntoId)
 const cargando = ref(true)
 const error = ref('')
 const fotoActiva = ref(0)
@@ -18,6 +21,7 @@ const fotoActiva = ref(0)
 // agregamos la instrucción final del espacio como último paso.
 const pasos = computed(() => {
   if (!espacio.value) return []
+  // Un punto del grafo no tiene instrucción final: su ruta ya termina en él.
   return [...(espacio.value.rutaDesdeQr || []), espacio.value.instruccionFinal].filter(Boolean)
 })
 
@@ -31,12 +35,18 @@ const fotosCarrusel = computed(() => {
 async function cargar() {
   cargando.value = true
   try {
-    const data = await api.buscarEspacios({ qr: session.qrSlug })
-    // route.params.espacioId llega como texto; espacio.id es numérico
-    // desde el cambio a IDs autoincrementales, así que comparamos
-    // convirtiendo ambos al mismo tipo.
-    espacio.value = data.resultados.find((e) => String(e.id) === route.params.espacioId) || null
-    if (!espacio.value) error.value = 'No encontramos ese espacio.'
+    if (esPunto) {
+      const puntos = await api.buscarPuntos({ qr: session.qrSlug })
+      espacio.value = puntos.find((p) => String(p.id) === route.params.puntoId) || null
+      if (!espacio.value) error.value = 'No encontramos ese lugar.'
+    } else {
+      const data = await api.buscarEspacios({ qr: session.qrSlug })
+      // route.params.espacioId llega como texto; espacio.id es numérico
+      // desde el cambio a IDs autoincrementales, así que comparamos
+      // convirtiendo ambos al mismo tipo.
+      espacio.value = data.resultados.find((e) => String(e.id) === route.params.espacioId) || null
+      if (!espacio.value) error.value = 'No encontramos ese espacio.'
+    }
   } catch (err) {
     error.value = err.message
   } finally {

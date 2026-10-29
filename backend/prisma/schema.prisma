@@ -99,12 +99,15 @@ model Ruta {
   qrId          Int
   bloqueId      Int? // destino a nivel bloque (flujo original)
   espacioId     Int? // destino a nivel espacio puntual (generado desde el grafo)
+  nodoGrafoId   Int? // destino a un punto del grafo (punto de referencia, ascensor, escalera…)
   instrucciones String[] // lista de pasos, ej. ["Camina hacia el Bloque C.", "Sube al segundo piso."]
   fotos         String[] @default([]) // URLs de fotos de referencia del recorrido (opcional)
 
   qr      Qr      @relation(fields: [qrId], references: [id], onDelete: Cascade)
   bloque  Bloque? @relation(fields: [bloqueId], references: [id], onDelete: Cascade)
   espacio Espacio? @relation(fields: [espacioId], references: [id], onDelete: Cascade)
+  // Si se elimina el punto del grafo, la ruta que llegaba a él se elimina también.
+  nodoGrafo NodoGrafo? @relation(fields: [nodoGrafoId], references: [id], onDelete: Cascade)
 
   // Snapshot de los ids de nodos/edges del grafo usados para generar esta
   // ruta (vacío si se creó a mano). Sirve solo para detectar, en el panel
@@ -122,6 +125,7 @@ model Ruta {
 
   @@unique([qrId, bloqueId]) // una sola ruta por combinación QR-Bloque
   @@unique([qrId, espacioId]) // una sola ruta por combinación QR-Espacio
+  @@unique([qrId, nodoGrafoId]) // una sola ruta por combinación QR-punto del grafo
   @@map("rutas")
 }
 
@@ -196,6 +200,10 @@ model NodoGrafo {
   piso      Int? // piso donde está el nodo (null si no aplica)
   pisoHasta Int? // solo para ESCALERA/ASCENSOR: piso al que se llega desde "piso"
 
+  // Solo para nodos intermedios: si es true, se puede buscar en la app
+  // pública y el generador de rutas masivo crea rutas hacia él.
+  visibleEnApp Boolean @default(false)
+
   qrId      Int? @unique
   bloqueId  Int? @unique
   espacioId Int? @unique
@@ -206,6 +214,9 @@ model NodoGrafo {
 
   edgesDesde EdgeGrafo[] @relation("EdgeOrigen")
   edgesHacia EdgeGrafo[] @relation("EdgeDestino")
+
+  // Rutas cuyo destino es este punto.
+  rutasDestino Ruta[]
 
   creadoEn DateTime @default(now())
 

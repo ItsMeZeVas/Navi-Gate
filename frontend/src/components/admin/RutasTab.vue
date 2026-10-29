@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { api } from '../../lib/api'
 
@@ -39,11 +39,40 @@ function agregarPaso(lista) {
   lista.push('')
 }
 
-// El destino de una ruta puede ser un Bloque (flujo manual de siempre)
-// o un Espacio puntual (normalmente generado desde el grafo de mapeo).
+// El destino de una ruta puede ser un Bloque (flujo manual de siempre),
+// un Espacio puntual o un punto del grafo (punto de referencia, ascensor…).
 function nombreDestino(ruta) {
-  return ruta.bloque?.nombre ?? ruta.espacio?.nombre ?? 'Destino eliminado'
+  return ruta.bloque?.nombre ?? ruta.espacio?.nombre ?? ruta.nodoGrafo?.etiqueta ?? 'Destino eliminado'
 }
+
+function nivelDestino(ruta) {
+  if (ruta.espacioId) return 'espacio'
+  if (ruta.nodoGrafoId) return 'punto'
+  return ''
+}
+
+// --- Filtros de la lista (con cientos de rutas generadas, hacen falta) ---
+const filtroQr = ref('')
+const filtroTexto = ref('')
+const limiteVisible = ref(60)
+
+function sinTildes(texto) {
+  return String(texto ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+const rutasFiltradas = computed(() => {
+  const texto = sinTildes(filtroTexto.value).trim()
+  return rutas.value.filter((ruta) => {
+    if (filtroQr.value && ruta.qrId !== Number(filtroQr.value)) return false
+    if (texto && !sinTildes(nombreDestino(ruta)).includes(texto)) return false
+    return true
+  })
+})
+
+const rutasMostradas = computed(() => rutasFiltradas.value.slice(0, limiteVisible.value))
 
 function quitarPaso(lista, indice) {
   if (lista.length > 1) lista.splice(indice, 1)
@@ -199,8 +228,22 @@ onMounted(cargar)
     <p v-if="error" class="error">{{ error }}</p>
     <div v-if="cargando" class="estado">Cargando rutas…</div>
 
-    <ul v-else class="lista">
-      <li v-for="ruta in rutas" :key="ruta.id" class="fila">
+    <div v-else class="filtros-rutas">
+      <select v-model="filtroQr" @change="limiteVisible = 60">
+        <option value="">Todos los QR</option>
+        <option v-for="qr in qrs" :key="qr.id" :value="qr.id">{{ qr.nombre }}</option>
+      </select>
+      <input
+        v-model="filtroTexto"
+        type="text"
+        placeholder="Buscar por destino…"
+        @input="limiteVisible = 60"
+      />
+      <span class="conteo-rutas">{{ rutasFiltradas.length }} ruta(s)</span>
+    </div>
+
+    <ul v-if="!cargando" class="lista">
+      <li v-for="ruta in rutasMostradas" :key="ruta.id" class="fila">
         <div v-if="editandoId === ruta.id" class="edicion">
           <div class="pasos-form">
             <div v-for="(paso, i) in pasosEdicion" :key="i" class="fila-paso">
@@ -247,7 +290,7 @@ onMounted(cargar)
           <div class="info">
             <span class="origen-destino">
               {{ ruta.qr.nombre }} → {{ nombreDestino(ruta) }}
-              <span v-if="ruta.espacioId" class="etiqueta-nivel">espacio</span>
+              <span v-if="nivelDestino(ruta)" class="etiqueta-nivel">{{ nivelDestino(ruta) }}</span>
             </span>
             <span v-if="ruta.desactualizada" class="etiqueta-desactualizada">
               ⚠ El mapa cambió desde que se generó esta ruta — revísala
@@ -263,6 +306,14 @@ onMounted(cargar)
         </template>
       </li>
     </ul>
+    <button
+      v-if="!cargando && rutasFiltradas.length > limiteVisible"
+      type="button"
+      class="mostrar-mas"
+      @click="limiteVisible += 60"
+    >
+      Mostrar más ({{ rutasFiltradas.length - limiteVisible }} restantes)
+    </button>
 
     <input
       ref="inputArchivoFoto"
@@ -454,6 +505,38 @@ onMounted(cargar)
 .origen-destino {
   font-weight: 600;
   font-size: 0.9rem;
+}
+
+.filtros-rutas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.filtros-rutas select,
+.filtros-rutas input {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.conteo-rutas {
+  font-size: 0.78rem;
+  color: var(--ng-ink-soft);
+}
+
+.mostrar-mas {
+  margin: 0.75rem 0;
+  padding: 0.45rem 0.9rem;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  cursor: pointer;
 }
 
 .etiqueta-nivel {

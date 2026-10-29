@@ -10,6 +10,8 @@ const session = useSessionStore()
 
 const termino = ref('')
 const resultados = ref([])
+// Puntos del grafo visibles en la app (puntos de referencia, ascensores…).
+const puntos = ref([])
 const exacto = ref(true)
 const buscando = ref(false)
 
@@ -25,8 +27,36 @@ const ETIQUETAS_TIPO = {
   OTRO: 'Otros',
 }
 
+const ETIQUETAS_PUNTO = {
+  PUNTO_REFERENCIA: 'Punto de referencia',
+  ESCALERA: 'Escalera',
+  ASCENSOR: 'Ascensor',
+  PASILLO: 'Pasillo',
+  PUERTA: 'Puerta',
+}
+
+function detallePunto(punto) {
+  const tipo = ETIQUETAS_PUNTO[punto.tipo] || 'Punto'
+  return punto.piso != null ? `${tipo}, Piso ${punto.piso}` : tipo
+}
+
+// Los puntos no tienen tipo ni bloque, así que se ocultan cuando hay un filtro por ellos.
+async function buscarPuntos() {
+  if (filtroTipo.value || filtroBloque.value) {
+    puntos.value = []
+    return
+  }
+  try {
+    puntos.value = await api.buscarPuntos({ qr: session.qrSlug, buscar: termino.value || '' })
+  } catch {
+    // Es un extra: si falla, la búsqueda de espacios sigue funcionando.
+    puntos.value = []
+  }
+}
+
 async function buscar() {
   buscando.value = true
+  buscarPuntos()
   try {
     const params = { qr: session.qrSlug }
     if (termino.value) params.buscar = termino.value
@@ -58,6 +88,10 @@ function limpiarFiltro() {
 
 function irADetalle(espacio) {
   router.push(`/app/como-llegar/${espacio.id}`)
+}
+
+function irAPunto(punto) {
+  router.push(`/app/como-llegar-punto/${punto.id}`)
 }
 
 onMounted(buscar)
@@ -109,7 +143,19 @@ watch(() => route.query, () => {
       </li>
     </ul>
 
-    <p v-if="!buscando && resultados.length === 0" class="estado">
+    <ul v-if="puntos.length" class="lista lista--puntos">
+      <li v-for="punto in puntos" :key="`punto-${punto.id}`">
+        <button class="tarjeta" @click="irAPunto(punto)">
+          <div class="info">
+            <span class="nombre">{{ punto.nombre }}</span>
+            <span class="detalle">{{ detallePunto(punto) }}</span>
+          </div>
+          <span class="flecha">›</span>
+        </button>
+      </li>
+    </ul>
+
+    <p v-if="!buscando && resultados.length === 0 && puntos.length === 0" class="estado">
       Sin resultados{{ termino ? ` para "${termino}"` : '' }}.
     </p>
   </div>
@@ -187,6 +233,10 @@ watch(() => route.query, () => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.lista--puntos {
+  margin-top: 0.5rem;
 }
 
 .tarjeta {

@@ -30,6 +30,13 @@ Pestaña "Grafo" del panel admin: alternativa visual a escribir rutas a mano.
 
 Pestaña "Estadísticas" del panel admin: cada vez que alguien abre la app desde un QR (`GET /api/qr/:slug`), queda un registro en `Escaneo`. El panel muestra el total, los últimos 7/30 días, un gráfico simple de escaneos por día, y un ranking de los QRs más usados — útil para decidir dónde conviene agregar QRs nuevos. Es de solo lectura y no afecta el resto de la app; si el registro de un escaneo falla por lo que sea, no bloquea la respuesta al estudiante.
 
+## Rutas masivas, espacios en lote y puntos buscables
+
+- **Generar todas las rutas de un QR** (pestaña Grafo): calcula, en una sola pasada por QR, el camino desde un QR (o desde todos) hasta todos los bloques, espacios y puntos del grafo marcados como "Visible en la app", y los guarda como `Rutas` normales (editables en la pestaña Rutas). Siempre en dos pasos: primero una vista previa (rutas nuevas, iguales, en conflicto, destinos sin camino) y solo al confirmar se escribe. Si una ruta ya existe y es idéntica, se salta; si es distinta, por defecto se **conserva** y solo se reemplaza la que elijas (al reemplazar se conservan sus fotos). Los destinos sin camino se reportan al final.
+- **Puntos buscables:** cada nodo intermedio (punto de referencia, ascensor, escalera, pasillo, puerta) tiene un interruptor "Visible en la app", activo por defecto en puntos de referencia, ascensores y escaleras. Los visibles aparecen en la búsqueda pública (solo si hay ruta desde el QR de la persona) con su botón "Cómo llegar".
+- **Crear espacios en lote** (pestaña Espacios): eliges bloque, piso, tipo, prefijo y rango (ej. bloque A, piso 2, del 201 al 215 crea "Salón A201" … "Salón A215"). Muestra una vista previa, salta los que ya existan y crea el resto, con la instrucción final por defecto "Piso N, nombre" (editable después). Máximo 200 por lote.
+- Las rutas generadas desde el grafo ya no crean una conexión directa QR→Bloque en el mapa (un atajo falso que acortaba los caminos); solo las rutas manuales lo hacen.
+
 ## Eventos
 
 Pestaña "Eventos" del panel admin: permite anunciar eventos del campus (ej. "Día de la Ingeniería Multimedia") que aparecen en una burbuja lateral en la pantalla de Inicio de la app pública.

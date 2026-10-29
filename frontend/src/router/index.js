@@ -30,6 +30,12 @@ const router = createRouter({
           name: 'app-como-llegar',
           component: () => import('../views/ComoLlegarView.vue'),
         },
+        {
+          // Misma pantalla, para llegar a un punto del grafo (punto de referencia, ascensor…).
+          path: 'como-llegar-punto/:puntoId',
+          name: 'app-como-llegar-punto',
+          component: () => import('../views/ComoLlegarView.vue'),
+        },
       ],
     },
     {

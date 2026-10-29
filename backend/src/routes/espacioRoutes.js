@@ -72,6 +72,84 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/espacios   (protegido)
+const TIPOS_ESPACIO = ['SALON', 'OFICINA', 'LABORATORIO', 'CAFETERIA', 'BANO', 'OTRO'];
+const NOMBRE_BASE_POR_TIPO = {
+  SALON: 'Salón',
+  OFICINA: 'Oficina',
+  LABORATORIO: 'Laboratorio',
+  CAFETERIA: 'Cafetería',
+  BANO: 'Baño',
+  OTRO: 'Espacio',
+};
+const MAXIMO_POR_LOTE = 200;
+
+// POST /api/espacios/lote   (protegido)
+// Crea varios espacios de una vez: { bloqueId, piso, tipo, prefijo, desde, hasta }.
+// Ej.: bloque A, piso 2, SALON, prefijo "A", 201 a 215 -> "Salón A201" … "Salón A215".
+// Los que ya existan en ese bloque (mismo nombre) se omiten; se crea el resto.
+router.post('/lote', requireAuth, async (req, res) => {
+  const { bloqueId, piso, tipo, prefijo, desde, hasta } = req.body;
+
+  const bloque = Number(bloqueId);
+  const pisoNumero = Number(piso);
+  const inicio = Number(desde);
+  const fin = Number(hasta);
+
+  if (!Number.isInteger(bloque) || !Number.isInteger(pisoNumero)) {
+    return res.status(400).json({ error: 'Elige el bloque y el piso.' });
+  }
+  if (!TIPOS_ESPACIO.includes(tipo)) {
+    return res.status(400).json({ error: 'El tipo de espacio no es válido.' });
+  }
+  if (!Number.isInteger(inicio) || !Number.isInteger(fin) || inicio < 0 || fin < inicio) {
+    return res.status(400).json({ error: 'El rango no es válido: "desde" debe ser un número menor o igual a "hasta".' });
+  }
+  if (fin - inicio + 1 > MAXIMO_POR_LOTE) {
+    return res.status(400).json({ error: `Máximo ${MAXIMO_POR_LOTE} espacios por lote.` });
+  }
+
+  const textoPrefijo = typeof prefijo === 'string' ? prefijo.trim() : '';
+
+  try {
+    const bloqueExiste = await prisma.bloque.findUnique({ where: { id: bloque } });
+    if (!bloqueExiste) return res.status(400).json({ error: 'Ese bloque no existe.' });
+
+    const nombres = [];
+    for (let numero = inicio; numero <= fin; numero += 1) {
+      nombres.push(`${NOMBRE_BASE_POR_TIPO[tipo]} ${textoPrefijo}${numero}`);
+    }
+
+    const existentes = await prisma.espacio.findMany({
+      where: { bloqueId: bloque },
+      select: { nombre: true },
+    });
+    const yaExisten = new Set(existentes.map((e) => e.nombre.trim().toLowerCase()));
+
+    const crear = nombres.filter((n) => !yaExisten.has(n.toLowerCase()));
+    const omitidos = nombres.filter((n) => yaExisten.has(n.toLowerCase()));
+
+    if (crear.length > 0) {
+      await prisma.espacio.createMany({
+        data: crear.map((nombre) => ({
+          nombre,
+          tipo,
+          piso: pisoNumero,
+          bloqueId: bloque,
+          // La instrucción final es obligatoria; esta es la de partida y
+          // se puede editar después, espacio por espacio.
+          instruccionFinal: `Piso ${pisoNumero}, ${nombre}`,
+          fotos: [],
+        })),
+      });
+    }
+
+    res.status(201).json({ creados: crear, omitidos });
+  } catch (error) {
+    console.error('Error en POST /espacios/lote:', error);
+    res.status(500).json({ error: 'Error interno del servidor.' });
+  }
+});
+
 router.post('/', requireAuth, async (req, res) => {
   const { nombre, tipo, piso, bloqueId, instruccionFinal, fotos } = req.body;
 

@@ -4,6 +4,8 @@ const { requireAuth } = require('../middleware/auth');
 const {
   obtenerGrafoCompleto,
   generarRutaDesdeGrafo,
+  previsualizarRutasMasivas,
+  aplicarRutasMasivas,
   marcarRutasDesactualizadasPorNodo,
   marcarRutasDesactualizadasPorEdge,
 } = require('../lib/grafoService');
@@ -11,6 +13,10 @@ const {
 const router = express.Router();
 
 const TIPOS_NODO_INTERMEDIO = ['PASILLO', 'ESCALERA', 'ASCENSOR', 'PUERTA', 'PUNTO_REFERENCIA'];
+
+// Por defecto son visibles en la app los puntos que alguien querría
+// encontrar; los pasillos y las puertas son solo paradas del camino.
+const VISIBLES_POR_DEFECTO = ['PUNTO_REFERENCIA', 'ESCALERA', 'ASCENSOR'];
 
 // Todo lo del grafo es exclusivo del panel admin.
 router.use(requireAuth);
@@ -33,7 +39,7 @@ router.get('/', async (req, res) => {
 // de referencia). Los nodos ligados a Qr/Bloque/Espacio se crean solos
 // al sincronizar, no se crean desde aquí.
 router.post('/nodos', async (req, res) => {
-  const { tipo, etiqueta, posX, posY, piso, pisoHasta } = req.body;
+  const { tipo, etiqueta, posX, posY, piso, pisoHasta, visibleEnApp } = req.body;
 
   if (!TIPOS_NODO_INTERMEDIO.includes(tipo)) {
     return res.status(400).json({ error: 'Tipo de nodo inválido para un nodo intermedio.' });
@@ -47,6 +53,7 @@ router.post('/nodos', async (req, res) => {
       data: {
         tipo,
         etiqueta: etiqueta.trim(),
+        visibleEnApp: visibleEnApp === undefined ? VISIBLES_POR_DEFECTO.includes(tipo) : Boolean(visibleEnApp),
         posX: posX ?? 0,
         posY: posY ?? 0,
         piso: piso !== undefined && piso !== null && piso !== '' ? Number(piso) : null,
@@ -64,8 +71,10 @@ router.post('/nodos', async (req, res) => {
 // Actualiza posición (al arrastrar en el lienzo) y, para nodos
 // intermedios, también nombre/piso/pisoHasta.
 router.patch('/nodos/:id', async (req, res) => {
-  const { posX, posY, etiqueta, piso, pisoHasta } = req.body;
+  const { posX, posY, etiqueta, piso, pisoHasta, visibleEnApp } = req.body;
   const data = {};
+
+  if (visibleEnApp !== undefined) data.visibleEnApp = Boolean(visibleEnApp);
 
   if (posX !== undefined) data.posX = Number(posX);
   if (posY !== undefined) data.posY = Number(posY);
@@ -169,6 +178,48 @@ router.post('/generar-ruta', async (req, res) => {
       return res.status(404).json({ error: error.message });
     }
     console.error('Error en POST /grafo/generar-ruta:', error);
+    res.status(500).json({ error: 'Error interno del servidor.' });
+  }
+});
+
+// ---------------------------------------------------------------------
+// Rutas masivas: de un QR (o de todos) hacia todos los destinos.
+// ---------------------------------------------------------------------
+function leerAlcance(body) {
+  if (body.todos) return { qrIds: null };
+  const qrId = Number(body.qrId);
+  if (!Number.isInteger(qrId)) return { error: 'Elige un QR o "todos los QR".' };
+  return { qrIds: [qrId] };
+}
+
+// POST /api/grafo/rutas-masivas/previsualizar   { qrId } | { todos: true }
+// Calcula y reporta (rutas nuevas, iguales, conflictos con rutas que ya
+// existen, destinos sin camino) SIN escribir nada.
+router.post('/rutas-masivas/previsualizar', async (req, res) => {
+  const { qrIds, error } = leerAlcance(req.body);
+  if (error) return res.status(400).json({ error });
+
+  try {
+    res.json(await previsualizarRutasMasivas({ qrIds }));
+  } catch (err) {
+    console.error('Error en POST /grafo/rutas-masivas/previsualizar:', err);
+    res.status(500).json({ error: 'Error interno del servidor.' });
+  }
+});
+
+// POST /api/grafo/rutas-masivas/aplicar   { qrId | todos, reemplazar: [clave, ...] }
+// Escribe las rutas nuevas. Una ruta existente y distinta solo se reemplaza
+// si el admin la eligió (su clave viene en "reemplazar"); el resto se conserva.
+router.post('/rutas-masivas/aplicar', async (req, res) => {
+  const { qrIds, error } = leerAlcance(req.body);
+  if (error) return res.status(400).json({ error });
+
+  const reemplazar = Array.isArray(req.body.reemplazar) ? req.body.reemplazar.map(String) : [];
+
+  try {
+    res.json(await aplicarRutasMasivas({ qrIds, reemplazar }));
+  } catch (err) {
+    console.error('Error en POST /grafo/rutas-masivas/aplicar:', err);
     res.status(500).json({ error: 'Error interno del servidor.' });
   }
 });
