@@ -200,6 +200,27 @@ function buscarCaminoMasCorto(nodos, edges, origenId, destinoId) {
 }
 
 // ---------------------------------------------------------------------
+// Una escalera/ascensor es UN solo nodo que puede cubrir varios pisos
+// (ej. -1 a 3). El piso al que realmente se sale NO es "pisoHasta": es el
+// piso del primer nodo con piso que viene después en el camino (la salida
+// que eligió el BFS). Solo si el camino no dice nada más adelante se usa
+// el rango propio del nodo, tomando el extremo contrario al piso actual.
+// ---------------------------------------------------------------------
+function pisoDeSalida(secuenciaNodos, indice, pisoActual) {
+  for (let j = indice + 1; j < secuenciaNodos.length; j += 1) {
+    const siguiente = secuenciaNodos[j];
+    if (siguiente.tipo === 'ESCALERA' || siguiente.tipo === 'ASCENSOR') continue;
+    if (siguiente.piso != null) return siguiente.piso;
+  }
+
+  const nodo = secuenciaNodos[indice];
+  const { piso, pisoHasta } = nodo;
+  if (pisoHasta == null) return null;
+  if (piso != null && pisoActual === pisoHasta) return piso; // vas en sentido contrario
+  return pisoHasta;
+}
+
+// ---------------------------------------------------------------------
 // Convierte una secuencia de nodos en pasos de texto natural, según el
 // tipo de cada nodo. El primer nodo (origen/QR) nunca genera un paso;
 // se narra desde el segundo nodo en adelante.
@@ -224,10 +245,13 @@ function generarInstrucciones(secuenciaNodos) {
       case 'ESCALERA':
       case 'ASCENSOR': {
         const medio = nodo.tipo === 'ESCALERA' ? 'la escalera' : 'el ascensor';
-        const destinoPiso = nodo.pisoHasta ?? null;
+        const destinoPiso = pisoDeSalida(secuenciaNodos, i, pisoActual);
         if (destinoPiso != null && pisoActual != null && destinoPiso !== pisoActual) {
           const verbo = destinoPiso > pisoActual ? 'Sube' : 'Baja';
           pasos.push(`${verbo} por ${medio} hasta el piso ${destinoPiso}.`);
+          pisoActual = destinoPiso;
+        } else if (destinoPiso != null && pisoActual == null) {
+          pasos.push(`Toma ${medio} hasta el piso ${destinoPiso}.`);
           pisoActual = destinoPiso;
         } else {
           pasos.push(`Usa ${medio} en ${nombre}.`);
