@@ -28,9 +28,12 @@ export const api = {
 
   getQr: (slug) => request(`/api/qr/${slug}`),
   listarQrs: (token) => request('/api/qr', { token }),
-  crearQr: (nombre, token) => request('/api/qr', { method: 'POST', body: { nombre }, token }),
+  crearQr: (nombre, token, bloqueId = null) =>
+    request('/api/qr', { method: 'POST', body: { nombre, bloqueId }, token }),
   actualizarQr: (id, nombre, token) =>
     request(`/api/qr/${id}`, { method: 'PATCH', body: { nombre }, token }),
+  actualizarBloqueDeQr: (id, bloqueId, token) =>
+    request(`/api/qr/${id}`, { method: 'PATCH', body: { bloqueId }, token }),
   eliminarQr: (id, token) => request(`/api/qr/${id}`, { method: 'DELETE', token }),
 
   buscarEspacios: (params) => {

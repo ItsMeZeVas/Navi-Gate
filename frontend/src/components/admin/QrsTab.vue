@@ -6,10 +6,12 @@ import { api } from '../../lib/api'
 
 const auth = useAuthStore()
 const qrs = ref([])
+const bloques = ref([])
 const cargando = ref(true)
 const error = ref('')
 
 const nombreNuevo = ref('')
+const bloqueNuevo = ref('')
 const creando = ref(false)
 
 const editandoId = ref(null)
@@ -28,7 +30,9 @@ function urlDe(qr) {
 async function cargar() {
   cargando.value = true
   try {
-    qrs.value = await api.listarQrs(auth.token)
+    const [listaQrs, listaBloques] = await Promise.all([api.listarQrs(auth.token), api.listarBloques(auth.token)])
+    qrs.value = listaQrs
+    bloques.value = listaBloques
   } catch (err) {
     error.value = err.message
   } finally {
@@ -68,13 +72,26 @@ async function crear() {
   creando.value = true
   error.value = ''
   try {
-    await api.crearQr(nombreNuevo.value.trim(), auth.token)
+    await api.crearQr(nombreNuevo.value.trim(), auth.token, bloqueNuevo.value || null)
     nombreNuevo.value = ''
+    bloqueNuevo.value = ''
     await cargar()
   } catch (err) {
     error.value = err.message
   } finally {
     creando.value = false
+  }
+}
+
+// Bloque donde está pegado el QR: si la persona busca ese bloque, la app
+// le dice que ya está ahí. Se guarda al elegir; vacío = sin bloque.
+async function cambiarBloque(qr, valor) {
+  error.value = ''
+  try {
+    await api.actualizarBloqueDeQr(qr.id, valor || null, auth.token)
+    qr.bloqueId = valor ? Number(valor) : null
+  } catch (err) {
+    error.value = err.message
   }
 }
 
@@ -127,6 +144,10 @@ onMounted(cargar)
 
     <form class="form-nuevo" @submit.prevent="crear">
       <input v-model="nombreNuevo" type="text" placeholder="Nombre del punto, ej. Entrada del Bosque" />
+      <select v-model="bloqueNuevo" title="Bloque donde está este QR (opcional)">
+        <option value="">Sin bloque</option>
+        <option v-for="bloque in bloques" :key="bloque.id" :value="bloque.id">{{ bloque.nombre }}</option>
+      </select>
       <button type="submit" :disabled="creando">Agregar QR</button>
     </form>
 
@@ -149,6 +170,14 @@ onMounted(cargar)
             <span class="nombre">{{ qr.nombre }}</span>
             <span class="url">{{ urlDe(qr) }}</span>
           </template>
+
+          <label class="bloque-qr">
+            Bloque donde está
+            <select :value="qr.bloqueId ?? ''" @change="cambiarBloque(qr, $event.target.value)">
+              <option value="">Ninguno (punto exterior)</option>
+              <option v-for="bloque in bloques" :key="bloque.id" :value="bloque.id">{{ bloque.nombre }}</option>
+            </select>
+          </label>
 
           <div class="acciones">
             <button class="btn-descargar" @click="descargar(qr)">Descargar PNG</button>
@@ -174,6 +203,24 @@ onMounted(cargar)
   border: 1px solid var(--color-border);
   border-radius: 6px;
   font-size: 0.9rem;
+}
+
+.form-nuevo select,
+.bloque-qr select {
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: white;
+}
+
+.bloque-qr {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--ng-ink-soft);
+  margin-top: 0.5rem;
 }
 
 .form-nuevo button {

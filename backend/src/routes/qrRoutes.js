@@ -33,30 +33,52 @@ router.get('/', requireAuth, async (req, res) => {
 
 // POST /api/qr   (protegido)
 router.post('/', requireAuth, async (req, res) => {
-  const { nombre } = req.body;
+  const { nombre, bloqueId } = req.body;
   if (!nombre || !nombre.trim()) {
     return res.status(400).json({ error: 'El nombre es obligatorio.' });
   }
   const slug = await slugDisponible(generarSlug(nombre));
-  const qr = await prisma.qr.create({ data: { nombre: nombre.trim(), slug } });
-  res.status(201).json(qr);
+  try {
+    const qr = await prisma.qr.create({
+      data: { nombre: nombre.trim(), slug, bloqueId: bloqueId ? Number(bloqueId) : null },
+    });
+    res.status(201).json(qr);
+  } catch (error) {
+    if (error.code === 'P2003') return res.status(400).json({ error: 'Ese bloque no existe.' });
+    console.error('Error en POST /qr:', error);
+    res.status(500).json({ error: 'Error interno del servidor.' });
+  }
 });
 
 // PATCH /api/qr/:id   (protegido)
-// Solo se puede renombrar; el slug (la URL) no cambia una vez creado,
-// para no invalidar códigos QR ya impresos.
+// Se puede renombrar y/o indicar en qué bloque está el QR (bloqueId: null lo
+// quita). El slug (la URL) no cambia una vez creado, para no invalidar
+// códigos QR ya impresos.
 router.patch('/:id', requireAuth, async (req, res) => {
-  const { nombre } = req.body;
-  if (!nombre || !nombre.trim()) {
-    return res.status(400).json({ error: 'El nombre es obligatorio.' });
+  const { nombre, bloqueId } = req.body;
+  const data = {};
+
+  if (nombre !== undefined) {
+    if (!nombre || !nombre.trim()) {
+      return res.status(400).json({ error: 'El nombre es obligatorio.' });
+    }
+    data.nombre = nombre.trim();
   }
+  if (bloqueId !== undefined) {
+    data.bloqueId = bloqueId ? Number(bloqueId) : null;
+  }
+  if (Object.keys(data).length === 0) {
+    return res.status(400).json({ error: 'No hay nada que actualizar.' });
+  }
+
   try {
     const qr = await prisma.qr.update({
       where: { id: Number(req.params.id) },
-      data: { nombre: nombre.trim() },
+      data,
     });
     res.json(qr);
   } catch (error) {
+    if (error.code === 'P2003') return res.status(400).json({ error: 'Ese bloque no existe.' });
     res.status(404).json({ error: 'QR no encontrado.' });
   }
 });

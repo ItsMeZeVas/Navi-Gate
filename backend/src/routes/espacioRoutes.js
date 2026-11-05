@@ -44,8 +44,9 @@ router.get('/', async (req, res) => {
 
     // Si nos dieron un QR de origen, adjuntamos la ruta hacia cada espacio.
     // Si existe una ruta específica hasta ese Espacio (normalmente generada
-    // con el grafo de mapeo), esa gana; si no, cae a la ruta de su Bloque
-    // (el comportamiento de siempre).
+    // con el grafo de mapeo), esa gana; si no, y el QR está en el mismo
+    // bloque del espacio, la persona ya llegó al bloque; si tampoco, cae a
+    // la ruta de su Bloque (el comportamiento de siempre).
     if (qr) {
       const qrRecord = await prisma.qr.findUnique({
         where: { slug: qr },
@@ -54,6 +55,14 @@ router.get('/', async (req, res) => {
 
       resultado = resultado.map((espacio) => {
         const rutaEspacio = qrRecord?.rutas.find((r) => r.espacioId === espacio.id);
+        const yaEstaEnElBloque = Boolean(qrRecord?.bloqueId) && qrRecord.bloqueId === espacio.bloqueId;
+        if (!rutaEspacio && yaEstaEnElBloque) {
+          return {
+            ...espacio,
+            rutaDesdeQr: [`Ya estás en ${espacio.bloque.nombre}.`],
+            rutaFotos: [],
+          };
+        }
         const rutaBloque = qrRecord?.rutas.find((r) => r.bloqueId === espacio.bloqueId);
         const ruta = rutaEspacio || rutaBloque;
         return {

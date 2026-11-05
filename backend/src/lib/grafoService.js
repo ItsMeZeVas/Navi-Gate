@@ -226,6 +226,20 @@ function pisoDeSalida(secuenciaNodos, indice, pisoActual) {
 // se narra desde el segundo nodo en adelante.
 // ---------------------------------------------------------------------
 function generarInstrucciones(secuenciaNodos) {
+  // Si el QR está pegado en el mismo bloque que es el destino, no hay nada
+  // que recorrer: la persona ya está ahí.
+  const primero = secuenciaNodos[0];
+  const ultimo = secuenciaNodos[secuenciaNodos.length - 1];
+  if (
+    secuenciaNodos.length > 1 &&
+    primero?.tipo === 'QR' &&
+    ultimo?.tipo === 'BLOQUE' &&
+    primero.qr?.bloqueId &&
+    primero.qr.bloqueId === ultimo.bloqueId
+  ) {
+    return [`Ya estás en ${ultimo.etiqueta}.`];
+  }
+
   const pasos = [];
   let pisoActual = secuenciaNodos[0]?.piso ?? null;
 
@@ -407,7 +421,12 @@ async function calcularPlanRutasMasivas({ qrIds }) {
     for (const destino of destinos) {
       const camino = reconstruirCamino(previo, nodoQr.id, destino.nodoId);
       if (!camino) {
-        inalcanzables.push({ tipo: destino.tipo, nombre: destino.nombre, detalle: destino.detalle });
+        // El bloque donde está el propio QR no necesita camino: ya se está ahí
+        // (la app pública lo resuelve sola), así que no cuenta como inalcanzable.
+        const esSuPropioBloque = destino.tipo === 'bloque' && destino.id === nodoQr.qr?.bloqueId;
+        if (!esSuPropioBloque) {
+          inalcanzables.push({ tipo: destino.tipo, nombre: destino.nombre, detalle: destino.detalle });
+        }
         continue;
       }
 

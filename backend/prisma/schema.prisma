@@ -65,6 +65,12 @@ model Qr {
   rutas Ruta[]
   escaneos Escaneo[]
 
+  // Bloque donde está físicamente pegado este QR (opcional). Si la persona
+  // busca ese mismo bloque, la app le dice que ya está ahí en vez de
+  // darle una ruta. Si se borra el bloque, el QR queda sin bloque.
+  bloqueId Int?
+  bloque   Bloque? @relation(fields: [bloqueId], references: [id], onDelete: SetNull)
+
   // Nodo del grafo de mapeo ligado a este QR (1 a 1, opcional: solo
   // existe una vez que el admin abrió la vista de grafo al menos una vez).
   nodoGrafo NodoGrafo?
@@ -81,6 +87,9 @@ model Bloque {
 
   espacios Espacio[]
   rutas    Ruta[]
+
+  // QRs que están físicamente en este bloque (ver Qr.bloqueId).
+  qrs Qr[]
 
   // Nodo del grafo de mapeo ligado a este Bloque (ver Qr.nodoGrafo).
   nodoGrafo NodoGrafo?
