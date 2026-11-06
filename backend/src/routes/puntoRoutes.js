@@ -1,5 +1,6 @@
 const express = require('express');
 const prisma = require('../prismaClient');
+const { cargarContextoCierres, aplicarCierresARuta } = require('../lib/grafoService');
 
 const router = express.Router();
 
@@ -26,27 +27,35 @@ router.get('/', async (req, res) => {
     });
 
     let rutas = [];
+    let qrId = null;
     if (qr) {
       const qrRecord = await prisma.qr.findUnique({
         where: { slug: String(qr) },
         include: { rutas: { where: { nodoGrafoId: { not: null } } } },
       });
       rutas = qrRecord?.rutas ?? [];
+      qrId = qrRecord?.id ?? null;
     }
+
+    // Solo si hay algo cerrado se carga el grafo; si no, null y todo sigue igual.
+    const contextoCierres = qr ? await cargarContextoCierres() : null;
 
     const texto = normalizar(buscar);
     let resultado = nodos
       .filter((nodo) => !texto || normalizar(nodo.etiqueta).includes(texto))
       .map((nodo) => {
         const ruta = rutas.find((r) => r.nodoGrafoId === nodo.id);
+        const cierre = aplicarCierresARuta(contextoCierres, { ruta, qrId, destino: { nodoGrafoId: nodo.id } });
         return {
           id: nodo.id,
           nombre: nodo.etiqueta,
           tipo: nodo.tipo,
           piso: nodo.piso,
           pisoHasta: nodo.pisoHasta,
-          rutaDesdeQr: ruta ? ruta.instrucciones : null,
+          rutaDesdeQr: ruta ? cierre.instrucciones : null,
           rutaFotos: ruta ? ruta.fotos : [],
+          cerrado: nodo.cerrada,
+          estadoRuta: cierre.estadoRuta,
         };
       });
 

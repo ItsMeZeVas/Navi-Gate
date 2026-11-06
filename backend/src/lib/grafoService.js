@@ -558,6 +558,80 @@ async function aplicarRutasMasivas({ qrIds, reemplazar = [] }) {
 }
 
 // ---------------------------------------------------------------------
+// Cierres temporales: la app pública esquiva los nodos marcados como
+// "cerrada" sin tocar las Rutas guardadas.
+//   - Si no hay nada cerrado, cargarContextoCierres devuelve null y no se
+//     hace ningún cálculo extra (el flujo de siempre queda intacto).
+//   - Si la ruta guardada pasa por un nodo cerrado, se recalcula con BFS
+//     ignorando los cerrados. Si no hay alternativa, se deja la ruta normal.
+//   - Si el destino mismo está cerrado, también se deja la ruta normal
+//     (solo se avisa que está cerrado).
+// estadoRuta: 'normal' | 'alternativa' | 'sin_alternativa'
+// ---------------------------------------------------------------------
+async function cargarContextoCierres() {
+  const cerrados = await prisma.nodoGrafo.findMany({ where: { cerrada: true }, select: { id: true } });
+  if (cerrados.length === 0) return null;
+
+  const [nodos, edges] = await Promise.all([
+    prisma.nodoGrafo.findMany({ include: { qr: true, bloque: true, espacio: true } }),
+    prisma.edgeGrafo.findMany(),
+  ]);
+
+  const nodosConEtiqueta = nodos.map((nodo) => ({
+    ...nodo,
+    etiqueta: nodo.qr?.nombre ?? nodo.bloque?.nombre ?? nodo.espacio?.nombre ?? nodo.etiqueta ?? 'Sin nombre',
+  }));
+  const cerradosIds = new Set(cerrados.map((n) => n.id));
+  const abiertos = nodosConEtiqueta.filter((n) => !cerradosIds.has(n.id));
+  const edgesAbiertos = edges.filter((e) => !cerradosIds.has(e.origenId) && !cerradosIds.has(e.destinoId));
+
+  return {
+    cerradosIds,
+    nodosPorId: new Map(nodosConEtiqueta.map((n) => [n.id, n])),
+    nodos: nodosConEtiqueta,
+    adyacenciaAbierta: construirAdyacencia(abiertos, edgesAbiertos),
+    arbolesPorOrigen: new Map(), // un BFS por QR de origen, reutilizado entre destinos
+  };
+}
+
+// ruta: registro de Ruta (o null). destino: { espacioId?, bloqueId?, nodoGrafoId? }
+// Devuelve { instrucciones, estadoRuta, destinoCerrado }.
+function aplicarCierresARuta(ctx, { ruta, qrId, destino }) {
+  const base = {
+    instrucciones: ruta?.instrucciones ?? null,
+    estadoRuta: 'normal',
+    destinoCerrado: false,
+  };
+  if (!ctx || !ruta) return base;
+
+  const nodoDestino = ctx.nodos.find(
+    (n) =>
+      (destino.espacioId && n.espacioId === destino.espacioId) ||
+      (destino.bloqueId && n.bloqueId === destino.bloqueId) ||
+      (destino.nodoGrafoId && n.id === destino.nodoGrafoId),
+  );
+  const destinoCerrado = Boolean(nodoDestino && ctx.cerradosIds.has(nodoDestino.id));
+  if (destinoCerrado) return { ...base, destinoCerrado: true };
+
+  // Solo las rutas generadas desde el grafo traen el camino que usaron.
+  // Las manuales no se pueden evaluar: se dejan como están.
+  const usados = (ruta.nodosGrafoUsados ?? []).filter((id) => id !== nodoDestino?.id);
+  if (!usados.some((id) => ctx.cerradosIds.has(id))) return base;
+
+  const nodoOrigen = ctx.nodos.find((n) => n.qrId === qrId);
+  if (!nodoOrigen || !nodoDestino) return { ...base, estadoRuta: 'sin_alternativa' };
+
+  if (!ctx.arbolesPorOrigen.has(nodoOrigen.id)) {
+    ctx.arbolesPorOrigen.set(nodoOrigen.id, arbolDeCaminos(ctx.adyacenciaAbierta, nodoOrigen.id));
+  }
+  const camino = reconstruirCamino(ctx.arbolesPorOrigen.get(nodoOrigen.id), nodoOrigen.id, nodoDestino.id);
+  if (!camino) return { ...base, estadoRuta: 'sin_alternativa' };
+
+  const secuencia = camino.nodosUsados.map((id) => ctx.nodosPorId.get(id));
+  return { ...base, instrucciones: generarInstrucciones(secuencia), estadoRuta: 'alternativa' };
+}
+
+// ---------------------------------------------------------------------
 // Marca como desactualizadas las rutas que usaron un nodo o edge que
 // está por eliminarse. Se llama antes de borrar en las rutas del grafo.
 // ---------------------------------------------------------------------
@@ -588,4 +662,6 @@ module.exports = {
   sincronizarGrafoBase,
   marcarRutasDesactualizadasPorNodo,
   marcarRutasDesactualizadasPorEdge,
+  cargarContextoCierres,
+  aplicarCierresARuta,
 };

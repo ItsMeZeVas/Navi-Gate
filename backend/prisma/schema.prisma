@@ -213,6 +213,10 @@ model NodoGrafo {
   // pública y el generador de rutas masivo crea rutas hacia él.
   visibleEnApp Boolean @default(false)
 
+  // Cierre temporal (salón, pasillo, escalera…): mientras sea true, la app
+  // pública esquiva este nodo al mostrar rutas. No modifica las Rutas guardadas.
+  cerrada Boolean @default(false)
+
   qrId      Int? @unique
   bloqueId  Int? @unique
   espacioId Int? @unique

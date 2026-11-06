@@ -71,10 +71,11 @@ router.post('/nodos', async (req, res) => {
 // Actualiza posición (al arrastrar en el lienzo) y, para nodos
 // intermedios, también nombre/piso/pisoHasta.
 router.patch('/nodos/:id', async (req, res) => {
-  const { posX, posY, etiqueta, piso, pisoHasta, visibleEnApp } = req.body;
+  const { posX, posY, etiqueta, piso, pisoHasta, visibleEnApp, cerrada } = req.body;
   const data = {};
 
   if (visibleEnApp !== undefined) data.visibleEnApp = Boolean(visibleEnApp);
+  if (cerrada !== undefined) data.cerrada = Boolean(cerrada);
 
   if (posX !== undefined) data.posX = Number(posX);
   if (posY !== undefined) data.posY = Number(posY);
@@ -83,6 +84,13 @@ router.patch('/nodos/:id', async (req, res) => {
   if (pisoHasta !== undefined) data.pisoHasta = pisoHasta === null || pisoHasta === '' ? null : Number(pisoHasta);
 
   try {
+    // Un QR no se puede cerrar: es el punto de partida de la persona.
+    if (data.cerrada) {
+      const actual = await prisma.nodoGrafo.findUnique({ where: { id: Number(req.params.id) } });
+      if (actual?.tipo === 'QR') {
+        return res.status(400).json({ error: 'Un QR no se puede marcar como cerrado.' });
+      }
+    }
     const nodo = await prisma.nodoGrafo.update({ where: { id: Number(req.params.id) }, data });
     res.json(nodo);
   } catch (error) {

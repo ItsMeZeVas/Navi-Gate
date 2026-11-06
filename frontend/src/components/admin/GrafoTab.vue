@@ -145,8 +145,8 @@ function nodoAFlow(nodo) {
   return {
     id: String(nodo.id),
     position: { x: nodo.posX, y: nodo.posY },
-    label: textoNodo(nodo),
-    class: ['nodo-grafo', `nodo-tipo-${nodo.tipo.toLowerCase()}`],
+    label: nodo.cerrada ? `${textoNodo(nodo)} · CERRADA` : textoNodo(nodo),
+    class: ['nodo-grafo', `nodo-tipo-${nodo.tipo.toLowerCase()}`, ...(nodo.cerrada ? ['nodo-cerrado'] : [])],
     data: nodo,
   }
 }
@@ -287,6 +287,22 @@ async function guardarEdicionNodo() {
     Object.assign(nodoSeleccionado.value, actualizado)
     refrescarFlow()
     deseleccionar()
+  } catch (err) {
+    error.value = err.message
+  }
+}
+
+// Cierra o reabre el nodo seleccionado al instante (sin pasar por "Guardar").
+// Mientras esté cerrado, la app pública esquiva este nodo al mostrar rutas;
+// las Rutas guardadas no se modifican.
+async function alternarCierreNodo() {
+  if (!nodoSeleccionado.value) return
+  error.value = ''
+  try {
+    const cerrada = !nodoSeleccionado.value.cerrada
+    await api.actualizarNodoGrafo(nodoSeleccionado.value.id, { cerrada }, auth.token)
+    nodoSeleccionado.value.cerrada = cerrada
+    refrescarFlow()
   } catch (err) {
     error.value = err.message
   }
@@ -560,6 +576,18 @@ onMounted(async () => {
               <input v-model="edicionNodo.visibleEnApp" type="checkbox" /> Visible en la app
             </label>
             <p class="panel-nota">Visible = se puede buscar en la app pública y el generador masivo le crea rutas.</p>
+          </template>
+          <template v-if="nodoSeleccionado.tipo !== 'QR'">
+            <p v-if="nodoSeleccionado.cerrada" class="panel-aviso-cierre">
+              Cerrado: la app pública lo esquiva y busca otro camino.
+            </p>
+            <button
+              class="btn-cierre"
+              :class="{ 'btn-cierre--reabrir': nodoSeleccionado.cerrada }"
+              @click="alternarCierreNodo"
+            >
+              {{ nodoSeleccionado.cerrada ? 'Reabrir' : 'Marcar como cerrada' }}
+            </button>
           </template>
           <div class="panel-acciones">
             <button v-if="!esNodoLigado(nodoSeleccionado)" class="btn-guardar" @click="guardarEdicionNodo">
@@ -1045,6 +1073,35 @@ onMounted(async () => {
   background: #f0f0ee;
   color: #1f2a24;
   border-color: rgba(31, 42, 36, 0.3);
+}
+
+.lienzo-wrap :deep(.nodo-cerrado) {
+  background: #fde8e8;
+  border-color: #c0392b;
+  color: #8a1f14;
+  text-decoration: line-through;
+  opacity: 0.85;
+}
+
+.btn-cierre {
+  border: 1px solid #c0392b;
+  background: #fff;
+  color: #c0392b;
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-cierre--reabrir {
+  background: #c0392b;
+  color: #fff;
+}
+
+.panel-aviso-cierre {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #8a1f14;
 }
 
 .lienzo-wrap :deep(.nodo-en-ruta) {

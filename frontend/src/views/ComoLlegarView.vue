@@ -25,6 +25,26 @@ const pasos = computed(() => {
   return [...(espacio.value.rutaDesdeQr || []), espacio.value.instruccionFinal].filter(Boolean)
 })
 
+// Avisos por cierres que puso el admin (nodos marcados como "Cerrada").
+// Un destino cerrado se sigue mostrando, con su ruta normal; si la ruta
+// pasaba por algo cerrado, el backend ya mandó la alternativa (si hay).
+const avisoCierre = computed(() => {
+  if (!espacio.value) return null
+  if (espacio.value.cerrado) {
+    return { tipo: 'cerrado', texto: 'Este lugar está cerrado en este momento.' }
+  }
+  if (espacio.value.estadoRuta === 'alternativa') {
+    return { tipo: 'alternativa', texto: 'Hay un tramo cerrado. Esta es una ruta alternativa.' }
+  }
+  if (espacio.value.estadoRuta === 'sin_alternativa') {
+    return {
+      tipo: 'cerrado',
+      texto: 'Hay un tramo cerrado y no encontramos otro camino. Es posible que no puedas pasar.',
+    }
+  }
+  return null
+})
+
 // Fotos de la ruta (el trayecto hasta el bloque) primero, y luego
 // las del espacio en sí (el detalle final), todas en un solo carrusel.
 const fotosCarrusel = computed(() => {
@@ -74,6 +94,10 @@ onMounted(cargar)
         <span class="desde">Desde {{ session.qrNombre }}</span>
       </div>
 
+      <div v-if="avisoCierre" class="aviso-cierre" :class="`aviso-cierre--${avisoCierre.tipo}`" role="status">
+        {{ avisoCierre.texto }}
+      </div>
+
       <div v-if="fotosCarrusel.length" class="carrusel">
         <img :src="fotosCarrusel[fotoActiva]" alt="Foto de referencia del recorrido" />
         <div v-if="fotosCarrusel.length > 1" class="puntos">
@@ -99,6 +123,26 @@ onMounted(cargar)
 </template>
 
 <style scoped>
+.aviso-cierre {
+  margin-bottom: 1rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.aviso-cierre--cerrado {
+  background: #fde8e8;
+  color: #8a1f14;
+  border: 1px solid #f1b5ae;
+}
+
+.aviso-cierre--alternativa {
+  background: #fff4dc;
+  color: #7a5200;
+  border: 1px solid #f0d28a;
+}
+
 .pagina {
   padding: 1.25rem 1.25rem 1rem;
   max-width: 480px;

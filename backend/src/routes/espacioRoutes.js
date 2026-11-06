@@ -2,6 +2,7 @@ const express = require('express');
 const Fuse = require('fuse.js');
 const prisma = require('../prismaClient');
 const { requireAuth } = require('../middleware/auth');
+const { cargarContextoCierres, aplicarCierresARuta } = require('../lib/grafoService');
 
 const router = express.Router();
 
@@ -53,6 +54,9 @@ router.get('/', async (req, res) => {
         include: { rutas: true },
       });
 
+      // Solo si hay algo cerrado se carga el grafo; si no, null y todo sigue igual.
+      const contextoCierres = qrRecord ? await cargarContextoCierres() : null;
+
       resultado = resultado.map((espacio) => {
         const rutaEspacio = qrRecord?.rutas.find((r) => r.espacioId === espacio.id);
         const yaEstaEnElBloque = Boolean(qrRecord?.bloqueId) && qrRecord.bloqueId === espacio.bloqueId;
@@ -65,10 +69,24 @@ router.get('/', async (req, res) => {
         }
         const rutaBloque = qrRecord?.rutas.find((r) => r.bloqueId === espacio.bloqueId);
         const ruta = rutaEspacio || rutaBloque;
+
+        // Cierres: el espacio cerrado (o su bloque, si la ruta llega al bloque)
+        // se avisa; si la ruta pasa por algo cerrado se ofrece la alternativa.
+        const cierre = aplicarCierresARuta(contextoCierres, {
+          ruta,
+          qrId: qrRecord?.id,
+          destino: rutaEspacio ? { espacioId: espacio.id } : { bloqueId: espacio.bloqueId },
+        });
+        const espacioCerrado = cierre.destinoCerrado || (contextoCierres
+          ? contextoCierres.nodos.some((n) => n.espacioId === espacio.id && contextoCierres.cerradosIds.has(n.id))
+          : false);
+
         return {
           ...espacio,
-          rutaDesdeQr: ruta ? ruta.instrucciones : null,
+          rutaDesdeQr: ruta ? cierre.instrucciones : null,
           rutaFotos: ruta ? ruta.fotos : [],
+          cerrado: espacioCerrado,
+          estadoRuta: cierre.estadoRuta,
         };
       });
     }
