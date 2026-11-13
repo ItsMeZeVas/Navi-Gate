@@ -45,6 +45,12 @@ function nombreDestino(ruta) {
   return ruta.bloque?.nombre ?? ruta.espacio?.nombre ?? ruta.nodoGrafo?.etiqueta ?? 'Destino eliminado'
 }
 
+// La instrucción final vive en el Espacio (no en la ruta). La app pública se la
+// agrega como último paso, así que aquí también se muestra para ver el recorrido completo.
+function instruccionFinal(ruta) {
+  return ruta.espacio?.instruccionFinal?.trim() || ''
+}
+
 function nivelDestino(ruta) {
   if (ruta.espacioId) return 'espacio'
   if (ruta.nodoGrafoId) return 'punto'
@@ -261,6 +267,11 @@ onMounted(cargar)
             <button type="button" class="btn-agregar-paso" @click="agregarPaso(pasosEdicion)">
               + Agregar instrucción
             </button>
+            <div v-if="instruccionFinal(ruta)" class="fila-paso fila-paso-final">
+              <span class="numero-paso numero-paso-final">{{ pasosEdicion.length + 1 }}</span>
+              <input :value="instruccionFinal(ruta)" type="text" disabled />
+              <span class="etiqueta-final">se edita en la pestaña Espacios</span>
+            </div>
           </div>
 
           <div class="fotos-form">
@@ -297,6 +308,10 @@ onMounted(cargar)
             </span>
             <ol class="lista-pasos">
               <li v-for="(paso, i) in ruta.instrucciones" :key="i">{{ paso }}</li>
+              <li v-if="instruccionFinal(ruta)" class="paso-final">
+                {{ instruccionFinal(ruta) }}
+                <span class="etiqueta-final">instrucción final del espacio</span>
+              </li>
             </ol>
           </div>
           <div class="acciones">
@@ -566,6 +581,34 @@ onMounted(cargar)
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+}
+
+.paso-final {
+  color: var(--ng-navy);
+  font-weight: 600;
+}
+
+.etiqueta-final {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ng-navy);
+  background: var(--ng-accent-light);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.numero-paso-final {
+  background: var(--ng-ink-soft);
+}
+
+.fila-paso-final input {
+  background: var(--ng-accent-light);
+  color: var(--ng-ink-soft);
 }
 
 .acciones {
