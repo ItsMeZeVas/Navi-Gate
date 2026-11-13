@@ -36,8 +36,12 @@ function estadoDe(item) {
   return { clave: 'en-curso', texto: 'En curso' }
 }
 
+// Solo la primera carga muestra el "Cargando…"; las recargas tras guardar son
+// silenciosas para que la lista no desaparezca ni se pierda el scroll.
+let primeraCargaHecha = false
+
 async function cargar() {
-  cargando.value = true
+  if (!primeraCargaHecha) cargando.value = true
   error.value = ''
   try {
     const [listaEventos, datosEspacios] = await Promise.all([
@@ -50,6 +54,7 @@ async function cargar() {
     error.value = err.message
   } finally {
     cargando.value = false
+    primeraCargaHecha = true
   }
 }
 

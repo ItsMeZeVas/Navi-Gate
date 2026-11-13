@@ -159,8 +159,12 @@ function edgeAFlow(edge) {
   }
 }
 
+// Solo la primera carga muestra el "Cargando…"; las recargas tras guardar son
+// silenciosas para que la lista no desaparezca ni se pierda el scroll.
+let primeraCargaHecha = false
+
 async function cargarGrafo() {
-  cargando.value = true
+  if (!primeraCargaHecha) cargando.value = true
   error.value = ''
   try {
     const { nodos, edges } = await api.obtenerGrafo(auth.token)
@@ -171,6 +175,7 @@ async function cargarGrafo() {
     error.value = err.message
   } finally {
     cargando.value = false
+    primeraCargaHecha = true
   }
 }
 

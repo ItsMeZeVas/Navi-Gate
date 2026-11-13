@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import EspaciosTab from '../components/admin/EspaciosTab.vue'
@@ -13,7 +13,28 @@ import EventosTab from '../components/admin/EventosTab.vue'
 const auth = useAuthStore()
 const router = useRouter()
 
-const pestañaActiva = ref('espacios')
+// La pestaña activa se recuerda: si se recarga la página, vuelves a donde ibas.
+const PESTAÑAS = ['espacios', 'bloques', 'rutas', 'qrs', 'grafo', 'eventos', 'escaneos']
+const CLAVE_PESTAÑA = 'navigate_admin_pestana'
+
+function pestañaGuardada() {
+  try {
+    const guardada = sessionStorage.getItem(CLAVE_PESTAÑA)
+    return PESTAÑAS.includes(guardada) ? guardada : 'espacios'
+  } catch {
+    return 'espacios'
+  }
+}
+
+const pestañaActiva = ref(pestañaGuardada())
+
+watch(pestañaActiva, (valor) => {
+  try {
+    sessionStorage.setItem(CLAVE_PESTAÑA, valor)
+  } catch {
+    // sin almacenamiento disponible: simplemente no se recuerda
+  }
+})
 
 function salir() {
   auth.logout()
@@ -53,13 +74,15 @@ function salir() {
         </button>
       </nav>
 
-      <EspaciosTab v-if="pestañaActiva === 'espacios'" />
-      <BloquesTab v-else-if="pestañaActiva === 'bloques'" />
-      <RutasTab v-else-if="pestañaActiva === 'rutas'" />
-      <QrsTab v-else-if="pestañaActiva === 'qrs'" />
-      <GrafoTab v-else-if="pestañaActiva === 'grafo'" />
-      <EventosTab v-else-if="pestañaActiva === 'eventos'" />
-      <EscaneosTab v-else-if="pestañaActiva === 'escaneos'" />
+      <Transition name="cambio-pestana" mode="out-in">
+        <EspaciosTab v-if="pestañaActiva === 'espacios'" />
+        <BloquesTab v-else-if="pestañaActiva === 'bloques'" />
+        <RutasTab v-else-if="pestañaActiva === 'rutas'" />
+        <QrsTab v-else-if="pestañaActiva === 'qrs'" />
+        <GrafoTab v-else-if="pestañaActiva === 'grafo'" />
+        <EventosTab v-else-if="pestañaActiva === 'eventos'" />
+        <EscaneosTab v-else-if="pestañaActiva === 'escaneos'" />
+      </Transition>
     </main>
   </div>
 </template>
@@ -126,5 +149,20 @@ function salir() {
 .pestañas button.activa {
   color: var(--ng-navy);
   border-bottom-color: var(--ng-navy);
+}
+.cambio-pestana-enter-active,
+.cambio-pestana-leave-active {
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+
+.cambio-pestana-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.cambio-pestana-leave-to {
+  opacity: 0;
 }
 </style>

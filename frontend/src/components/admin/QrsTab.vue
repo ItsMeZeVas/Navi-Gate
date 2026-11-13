@@ -27,8 +27,12 @@ function urlDe(qr) {
   return `${base}/qr/${qr.slug}`
 }
 
+// Solo la primera carga muestra el "Cargando…"; las recargas tras guardar son
+// silenciosas para que la lista no desaparezca ni se pierda el scroll.
+let primeraCargaHecha = false
+
 async function cargar() {
-  cargando.value = true
+  if (!primeraCargaHecha) cargando.value = true
   try {
     const [listaQrs, listaBloques] = await Promise.all([api.listarQrs(auth.token), api.listarBloques(auth.token)])
     qrs.value = listaQrs
@@ -37,6 +41,7 @@ async function cargar() {
     error.value = err.message
   } finally {
     cargando.value = false
+    primeraCargaHecha = true
   }
   // Esperamos a que Vue termine de renderizar los <canvas> (aparecen
   // recién cuando cargando pasa a false) antes de dibujar en ellos.

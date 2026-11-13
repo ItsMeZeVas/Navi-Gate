@@ -6,7 +6,11 @@ import BarraNavegacion from '../components/BarraNavegacion.vue'
 <template>
   <div class="shell">
     <div class="area-vista">
-      <RouterView />
+      <RouterView v-slot="{ Component, route }">
+        <Transition name="vista" mode="out-in">
+          <component :is="Component" :key="route.path" />
+        </Transition>
+      </RouterView>
     </div>
     <BarraNavegacion />
   </div>
@@ -19,5 +23,27 @@ import BarraNavegacion from '../components/BarraNavegacion.vue'
 
 .area-vista {
   padding-bottom: 4.5rem;
+}
+.vista-enter-active,
+.vista-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.vista-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.vista-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vista-enter-active,
+  .vista-leave-active {
+    transition: none;
+  }
 }
 </style>
