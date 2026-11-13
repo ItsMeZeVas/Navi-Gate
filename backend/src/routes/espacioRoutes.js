@@ -21,7 +21,10 @@ router.get('/', async (req, res) => {
         ...(tipo ? { tipo } : {}),
         ...(bloqueId ? { bloqueId: Number(bloqueId) } : {}),
       },
-      include: { bloque: true },
+      include: {
+        bloque: { include: { nodoGrafo: true } },
+        nodoGrafo: true,
+      },
       orderBy: { nombre: 'asc' },
     });
 
@@ -63,7 +66,12 @@ router.get('/', async (req, res) => {
         if (!rutaEspacio && yaEstaEnElBloque) {
           return {
             ...espacio,
+            // IDs aditivos para que el cliente pueda localizar el pin del
+            // espacio o, si no tiene nodo propio, el pin de su bloque.
+            nodoGrafoId: espacio.nodoGrafo?.id ?? null,
+            bloqueNodoGrafoId: espacio.bloque.nodoGrafo?.id ?? null,
             rutaDesdeQr: [`Ya estás en ${espacio.bloque.nombre}.`],
+            rutaNodosPorPaso: espacio.bloque.nodoGrafo?.id ? [espacio.bloque.nodoGrafo.id] : [],
             rutaFotos: [],
           };
         }
@@ -83,7 +91,10 @@ router.get('/', async (req, res) => {
 
         return {
           ...espacio,
+          nodoGrafoId: espacio.nodoGrafo?.id ?? null,
+          bloqueNodoGrafoId: espacio.bloque.nodoGrafo?.id ?? null,
           rutaDesdeQr: ruta ? cierre.instrucciones : null,
+          rutaNodosPorPaso: ruta ? cierre.nodosGrafoPorPaso : [],
           rutaFotos: ruta ? ruta.fotos : [],
           cerrado: espacioCerrado,
           estadoRuta: cierre.estadoRuta,

@@ -53,6 +53,7 @@ router.get('/', async (req, res) => {
           piso: nodo.piso,
           pisoHasta: nodo.pisoHasta,
           rutaDesdeQr: ruta ? cierre.instrucciones : null,
+          rutaNodosPorPaso: ruta ? cierre.nodosGrafoPorPaso : [],
           rutaFotos: ruta ? ruta.fotos : [],
           cerrado: nodo.cerrada,
           estadoRuta: cierre.estadoRuta,

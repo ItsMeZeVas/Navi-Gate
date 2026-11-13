@@ -105,6 +105,7 @@ router.get('/:slug', async (req, res) => {
     const qr = await prisma.qr.findUnique({
       where: { slug: req.params.slug },
       include: {
+        nodoGrafo: true,
         rutas: {
           include: {
             bloque: {

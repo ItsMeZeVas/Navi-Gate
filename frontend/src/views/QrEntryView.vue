@@ -19,7 +19,7 @@ onMounted(async () => {
 
   try {
     const qr = await api.getQr(route.params.slug)
-    session.setQr(qr.slug, qr.nombre)
+    session.setQr(qr.slug, qr.nombre, qr.nodoGrafo?.id)
     router.replace('/app/inicio')
   } catch (err) {
     error.value = err.message

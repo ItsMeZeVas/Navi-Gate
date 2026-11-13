@@ -10,6 +10,14 @@ export default defineConfig({
     vue(),
     vueDevTools(),
   ],
+  // Docker Desktop en Windows puede no notificar a Vite los cambios del
+  // volumen compartido. Polling mantiene HMR y la recarga de configuración.
+  server: {
+    watch: {
+      usePolling: true,
+      interval: 500,
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

@@ -597,8 +597,15 @@ async function cargarContextoCierres() {
 // ruta: registro de Ruta (o null). destino: { espacioId?, bloqueId?, nodoGrafoId? }
 // Devuelve { instrucciones, estadoRuta, destinoCerrado }.
 function aplicarCierresARuta(ctx, { ruta, qrId, destino }) {
+  const rutaNodos = ruta?.nodosGrafoUsados ?? [];
+  const nodosPorPaso = rutaNodos.length - 1 === (ruta?.instrucciones?.length ?? 0)
+    ? rutaNodos.slice(1)
+    : [];
   const base = {
     instrucciones: ruta?.instrucciones ?? null,
+    // Cada instrucción de una ruta del grafo corresponde al nodo de ese
+    // índice después del origen (el origen no produce instrucción).
+    nodosGrafoPorPaso: nodosPorPaso,
     estadoRuta: 'normal',
     destinoCerrado: false,
   };
@@ -628,7 +635,12 @@ function aplicarCierresARuta(ctx, { ruta, qrId, destino }) {
   if (!camino) return { ...base, estadoRuta: 'sin_alternativa' };
 
   const secuencia = camino.nodosUsados.map((id) => ctx.nodosPorId.get(id));
-  return { ...base, instrucciones: generarInstrucciones(secuencia), estadoRuta: 'alternativa' };
+  return {
+    ...base,
+    instrucciones: generarInstrucciones(secuencia),
+    nodosGrafoPorPaso: camino.nodosUsados.slice(1),
+    estadoRuta: 'alternativa',
+  };
 }
 
 // ---------------------------------------------------------------------

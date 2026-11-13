@@ -1,45 +1,33 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useSessionStore } from '../stores/session'
 import { api } from '../lib/api'
 import IconoPin from '../components/IconoPin.vue'
+import MapViewer from '../components/MapViewer.vue'
+import { campusMaps } from '../config/maps'
 
 const router = useRouter()
+const route = useRoute()
 const session = useSessionStore()
 
 const vista = ref('mapa') // 'mapa' | 'lista'
 const espacios = ref([])
 const cargando = ref(true)
 
-// Posiciones decorativas para los pines sobre el mapa (mientras no
-// tengamos coordenadas reales ni el plano ilustrado del campus).
-const POSICIONES = [
-  { top: '20%', left: '30%' },
-  { top: '35%', left: '65%' },
-  { top: '55%', left: '25%' },
-  { top: '65%', left: '55%' },
-  { top: '45%', left: '80%' },
-  { top: '75%', left: '15%' },
-]
-
-const bloques = ref([])
+const mapaId = ref(campusMaps[0]?.id)
+const mostrarEtiquetas = ref(false)
+const mapaActivo = computed(() => campusMaps.find((map) => map.id === mapaId.value))
+const modoCalibracion = computed(() => route.query.debug === 'pins')
 
 async function cargar() {
   cargando.value = true
   try {
     const data = await api.buscarEspacios({ qr: session.qrSlug })
     espacios.value = data.resultados
-    const vistos = new Map()
-    data.resultados.forEach((e) => vistos.set(e.bloque.id, e.bloque))
-    bloques.value = [...vistos.values()]
   } finally {
     cargando.value = false
   }
-}
-
-function irABloque(bloque) {
-  router.push({ path: '/app/buscar', query: { bloqueId: bloque.id } })
 }
 
 function irADetalle(espacio) {
@@ -64,17 +52,24 @@ onMounted(cargar)
 
     <div v-if="cargando" class="estado">Cargando…</div>
 
-    <div v-else-if="vista === 'mapa'" class="mapa">
-      <button
-        v-for="(bloque, i) in bloques"
-        :key="bloque.id"
-        class="pin"
-        :style="POSICIONES[i % POSICIONES.length]"
-        @click="irABloque(bloque)"
-        :title="bloque.nombre"
-      >
-        <IconoPin :size="26" />
-      </button>
+    <div v-else-if="vista === 'mapa'" class="mapa-panel">
+      <label class="selector-mapa">
+        Mapa
+        <select v-model="mapaId">
+          <option v-for="map in campusMaps" :key="map.id" :value="map.id">{{ map.name }}</option>
+        </select>
+      </label>
+      <label class="opcion-etiquetas">
+        <input v-model="mostrarEtiquetas" type="checkbox" /> Mostrar etiquetas de todos los pines
+      </label>
+      <MapViewer
+        v-if="mapaActivo"
+        :map="mapaActivo"
+        :pins="mapaActivo.pins"
+        :show-all-pins="mostrarEtiquetas"
+        :debug="modoCalibracion"
+      />
+      <p v-if="modoCalibracion" class="aviso-debug">Modo desarrollador activo. Edita el archivo de configuración para guardar la coordenada deseada.</p>
     </div>
 
     <ul v-else class="lista">
@@ -144,24 +139,11 @@ onMounted(cargar)
   color: white;
 }
 
-.mapa {
-  position: relative;
-  aspect-ratio: 4 / 5;
-  background: #D9D9D9;
-  border-radius: 14px;
-  overflow: hidden;
-}
-
-.pin {
-  position: absolute;
-  transform: translate(-50%, -100%);
-  background: none;
-  border: none;
-  color: var(--ng-navy);
-  cursor: pointer;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.25));
-}
-
+.mapa-panel { display: flex; flex-direction: column; gap: 0.65rem; }
+.selector-mapa { display: flex; align-items: center; gap: 0.6rem; font-size: 0.9rem; font-weight: 600; }
+.selector-mapa select { flex: 1; min-width: 0; padding: 0.55rem; border: 1px solid var(--color-border); border-radius: 8px; background: white; }
+.opcion-etiquetas { display: flex; align-items: center; gap: 0.45rem; color: var(--ng-ink-soft); font-size: 0.82rem; }
+.aviso-debug { color: #795500; font-size: 0.8rem; margin: 0; }
 .estado {
   color: var(--ng-ink-soft);
   text-align: center;

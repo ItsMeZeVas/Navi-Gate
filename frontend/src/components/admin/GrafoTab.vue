@@ -472,7 +472,6 @@ async function guardarRutaGenerada() {
 onMounted(async () => {
   await cargarGrafo()
   await cargarListasParaGenerador()
-  fitView()
 })
 </script>
 
@@ -539,8 +538,9 @@ onMounted(async () => {
         <VueFlow
           v-model:nodes="nodosFlow"
           v-model:edges="edgesFlow"
+          fit-view-on-init
           :default-viewport="{ zoom: 0.75 }"
-          :min-zoom="0.2"
+          :min-zoom="0.01"
           :max-zoom="2"
           @node-drag-stop="onNodeDragStop"
           @connect="onConnect"

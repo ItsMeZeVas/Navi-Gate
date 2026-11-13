@@ -1,9 +1,14 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSessionStore } from '../stores/session'
 import { api } from '../lib/api'
 import IconoPin from '../components/IconoPin.vue'
+import MapViewer from '../components/MapViewer.vue'
+import RouteStepsList from '../components/RouteStepsList.vue'
+import { campusMaps } from '../config/maps'
+import { getMapLocationsByNodeId } from '../lib/mapLocations'
+import { inferirBloque, resolveRouteStepLocations, resolverEntradaOrigen } from '../lib/routeStepLocations'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,6 +21,8 @@ const esPunto = Boolean(route.params.puntoId)
 const cargando = ref(true)
 const error = ref('')
 const fotoActiva = ref(0)
+const mapaSeleccionadoId = ref('')
+const pasoActivo = ref(0)
 
 // Los pasos de la ruta ya vienen como lista desde el backend; solo
 // agregamos la instrucción final del espacio como último paso.
@@ -23,6 +30,12 @@ const pasos = computed(() => {
   if (!espacio.value) return []
   // Un punto del grafo no tiene instrucción final: su ruta ya termina en él.
   return [...(espacio.value.rutaDesdeQr || []), espacio.value.instruccionFinal].filter(Boolean)
+})
+const nodoPorPaso = computed(() => {
+  if (!espacio.value) return []
+  const nodos = espacio.value.rutaNodosPorPaso || []
+  if (esPunto || !espacio.value.instruccionFinal) return nodos
+  return [...nodos, espacio.value.nodoGrafoId ?? espacio.value.bloqueNodoGrafoId ?? null]
 })
 
 // Avisos por cierres que puso el admin (nodos marcados como "Cerrada").
@@ -52,8 +65,153 @@ const fotosCarrusel = computed(() => {
   return [...(espacio.value.rutaFotos || []), ...(espacio.value.fotos || [])]
 })
 
+const nodoDestinoId = computed(() => {
+  if (!espacio.value) return null
+  // Punto buscable = su propio ID de nodo; espacio = nodo del espacio o del bloque.
+  return esPunto ? espacio.value.id : espacio.value.nodoGrafoId ?? espacio.value.bloqueNodoGrafoId
+})
+const ubicacionesDestino = computed(() =>
+  getMapLocationsByNodeId(nodoDestinoId.value).sort((a, b) => (b.map.priority || 0) - (a.map.priority || 0)),
+)
+const ubicacionEntradaOrigen = computed(() => {
+  const ubicacionesGrafo = getMapLocationsByNodeId(session.qrNodoGrafoId)
+  return resolverEntradaOrigen(session.qrNombre, campusMaps, ubicacionesGrafo[0]?.map.id)
+})
+const ubicacionesOrigen = computed(() => {
+  const ubicacionesGrafo = getMapLocationsByNodeId(session.qrNodoGrafoId)
+  const entrada = ubicacionEntradaOrigen.value
+  if (entrada && !ubicacionesGrafo.some((item) => item.map.id === entrada.map.id && item.pin.id === entrada.pin.id)) {
+    return [...ubicacionesGrafo, entrada]
+  }
+  return ubicacionesGrafo
+})
+const ubicacionesPorPaso = computed(() => {
+  const results = []
+  const destinoBloque = espacio.value?.bloque?.nombre || ''
+  const destinoNombre = espacio.value?.nombre || espacio.value?.etiqueta || ''
+  const contextoBase = {
+    destinationBlockName: destinoBloque,
+    destinationName: destinoNombre,
+    destinationBlockCode: inferirBloque(`${destinoBloque} ${destinoNombre}`),
+    destinationFloor: espacio.value?.piso ?? null,
+    destinationMapIds: ubicacionesDestino.value.map((item) => item.map.id),
+    originName: session.qrNombre,
+    originBlockCode: inferirBloque(session.qrNombre),
+  }
+  let currentMapId = ubicacionesOrigen.value[0]?.map.id || ubicacionEntradaOrigen.value?.map.id || null
+  let currentBlockCode = contextoBase.originBlockCode || contextoBase.destinationBlockCode
+
+  pasos.value.forEach((paso, index) => {
+    const codigoBloqueAnterior = currentBlockCode
+    const codigoEnPaso = inferirBloque(paso)
+    if (codigoEnPaso) currentBlockCode = codigoEnPaso
+    let locations = resolveRouteStepLocations(
+      { text: paso, nodeId: nodoPorPaso.value[index] },
+      campusMaps,
+      { ...contextoBase, currentMapId, currentBlockCode, previousBlockCode: codigoBloqueAnterior },
+    )
+    if (!locations.length && index === pasos.value.length - 1 && !esPunto) locations = ubicacionesDestino.value
+
+    // Si el primer paso arranca en el mismo plano que el QR, añade también
+    // la entrada como origen visual, junto al marcador del paso.
+    const entrada = ubicacionEntradaOrigen.value
+    if (index === 0 && entrada && locations.some((item) => item.map.id === entrada.map.id)) {
+      const yaIncluida = locations.some((item) => item.pin?.id === entrada.pin.id)
+      if (!yaIncluida) locations.unshift(entrada)
+    }
+
+    if (locations.length) currentMapId = locations[0].map.id
+    if (codigoEnPaso) currentBlockCode = codigoEnPaso
+    results.push(locations)
+  })
+  return results
+})
+const ubicacionesEfectivasPasos = computed(() => {
+  let ultimaUbicacion = []
+  return ubicacionesPorPaso.value.map((locations) => {
+    if (locations.length) ultimaUbicacion = locations
+    if (ultimaUbicacion.length) return ultimaUbicacion
+    return ubicacionesOrigen.value
+  })
+})
+
+// El paso activo decide primero; los mapas de destino/origen siguen disponibles
+// como alternativas en las pestañas, pero no se muestran pines ajenos al paso.
+const opcionesMapa = computed(() => {
+  const opciones = new Map()
+  for (const ubicacion of ubicacionesEfectivasPasos.value[pasoActivo.value] || []) {
+    const existente = opciones.get(ubicacion.map.id)
+    if (existente) {
+      if (ubicacion.pin) existente.pasos.push(ubicacion.pin)
+    } else {
+      opciones.set(ubicacion.map.id, {
+        map: ubicacion.map,
+        pasos: ubicacion.pin ? [ubicacion.pin] : [],
+        destino: null,
+        origen: null,
+      })
+    }
+  }
+  for (const ubicacion of ubicacionesDestino.value) {
+    const existente = opciones.get(ubicacion.map.id)
+    if (existente) existente.destino = ubicacion.pin
+    else opciones.set(ubicacion.map.id, { map: ubicacion.map, pasos: [], destino: ubicacion.pin, origen: null })
+  }
+  for (const ubicacion of ubicacionesOrigen.value) {
+    const existente = opciones.get(ubicacion.map.id)
+    if (existente) existente.origen = ubicacion.pin
+    else opciones.set(ubicacion.map.id, { map: ubicacion.map, pasos: [], destino: null, origen: ubicacion.pin })
+  }
+  return [...opciones.values()]
+})
+const mapaActivo = computed(() =>
+  opcionesMapa.value.find((opcion) => opcion.map.id === mapaSeleccionadoId.value) || opcionesMapa.value[0] || null,
+)
+const pinesMapaActivo = computed(() => {
+  if (!mapaActivo.value) return []
+  const esPasoFinal = pasoActivo.value === pasos.value.length - 1
+  const elPasoEsMeta = mapaActivo.value.destino
+    && (esPasoFinal || mapaActivo.value.pasos?.some((pin) => String(pin.id) === String(mapaActivo.value.destino.id)))
+  if (elPasoEsMeta) {
+    return [{ ...mapaActivo.value.destino, style: 'destino-final' }]
+  }
+  return (mapaActivo.value.pasos || []).map((pin) => ({
+    ...pin,
+    style: pin.style || 'paso',
+  }))
+})
+const hayRuta = computed(() => Boolean(espacio.value?.rutaDesdeQr?.length))
+function seleccionarMapa(id) {
+  mapaSeleccionadoId.value = id
+}
+
+const imagenesPrecargadas = new Set()
+function precargarMapa(map) {
+  if (!map?.src || imagenesPrecargadas.has(map.src)) return
+  imagenesPrecargadas.add(map.src)
+  const imagen = new Image()
+  imagen.onerror = () => imagenesPrecargadas.delete(map.src)
+  imagen.src = map.src
+}
+
+function mapaParaPaso(index) {
+  const ubicacion = ubicacionesEfectivasPasos.value[index]?.[0]
+  return ubicacion?.map || null
+}
+
+watch(pasoActivo, (index) => {
+  mapaSeleccionadoId.value = ''
+  precargarMapa(mapaParaPaso(index - 1))
+  precargarMapa(mapaParaPaso(index + 1))
+})
+watch(ubicacionesEfectivasPasos, () => {
+  precargarMapa(mapaParaPaso(pasoActivo.value - 1))
+  precargarMapa(mapaParaPaso(pasoActivo.value + 1))
+}, { immediate: true })
+
 async function cargar() {
   cargando.value = true
+  pasoActivo.value = 0
   try {
     if (esPunto) {
       const puntos = await api.buscarPuntos({ qr: session.qrSlug })
@@ -98,6 +256,45 @@ onMounted(cargar)
         {{ avisoCierre.texto }}
       </div>
 
+      <section class="mapa-ruta" aria-label="Ubicación del origen y destino">
+        <div v-if="opcionesMapa.length > 1" class="mapa-pestanas" role="group" aria-label="Mapas disponibles">
+          <button
+            v-for="opcion in opcionesMapa"
+            :key="opcion.map.id"
+            type="button"
+            :aria-pressed="mapaActivo?.map.id === opcion.map.id"
+            @click="seleccionarMapa(opcion.map.id)"
+          >
+            {{ opcion.map.name }}
+            <span v-if="opcion.pasos?.length"> · paso</span>
+            <span v-if="opcion.destino"> · destino</span>
+            <span v-if="opcion.origen"> · origen</span>
+          </button>
+        </div>
+
+        <p v-if="!ubicacionesDestino.length" class="mapa-aviso" role="status">
+          Aún no hay un pin configurado para este destino.
+          <template v-if="opcionesMapa.length"> Se muestra el mapa del origen cuando está disponible.</template>
+        </p>
+        <p v-if="pasos.length && !ubicacionesPorPaso[pasoActivo]?.length" class="mapa-aviso" role="status">
+          Este paso no tiene un pin propio configurado; se conserva la última ubicación conocida.
+        </p>
+        <MapViewer
+          v-if="mapaActivo"
+          :map="mapaActivo.map"
+          :pins="pinesMapaActivo"
+          :highlighted-pin-ids="pinesMapaActivo.map((pin) => pin.id)"
+        />
+        <p v-else class="mapa-aviso" role="status">
+          No hay mapas configurados para este destino ni para el punto de partida.
+        </p>
+        <div v-if="mapaActivo" class="leyenda-mapa" aria-label="Leyenda de pines">
+          <span v-if="mapaActivo.pasos?.some((pin) => pin.style !== 'origen')"><i class="leyenda-punto leyenda-punto--paso"></i>Paso activo</span>
+          <span v-if="mapaActivo.pasos?.some((pin) => pin.style === 'origen')"><i class="leyenda-punto leyenda-punto--origen"></i>Inicio del tramo</span>
+          <span v-if="pinesMapaActivo.some((pin) => pin.style === 'destino-final')"><i class="leyenda-punto leyenda-punto--meta"></i>Meta</span>
+        </div>
+      </section>
+
       <div v-if="fotosCarrusel.length" class="carrusel">
         <img :src="fotosCarrusel[fotoActiva]" alt="Foto de referencia del recorrido" />
         <div v-if="fotosCarrusel.length > 1" class="puntos">
@@ -110,14 +307,10 @@ onMounted(cargar)
           ></button>
         </div>
       </div>
-      <div v-else class="placeholder-mapa">Vista del recorrido</div>
-
-      <ol class="pasos">
-        <li v-for="(paso, i) in pasos" :key="i">
-          <span class="numero">{{ i + 1 }}</span>
-          <span class="texto">{{ paso }}</span>
-        </li>
-      </ol>
+      <p v-if="!hayRuta" class="aviso-ruta-vacia" role="status">
+        No hay instrucciones de ruta disponibles para este destino desde el punto de partida actual.
+      </p>
+      <RouteStepsList v-else v-model="pasoActivo" :steps="pasos" />
     </template>
   </div>
 </template>
@@ -194,6 +387,27 @@ onMounted(cargar)
   position: relative;
 }
 
+.mapa-ruta { margin-top: 1rem; }
+.mapa-pestanas { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.6rem; }
+.mapa-pestanas button {
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: white;
+  color: var(--ng-ink-soft);
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+.mapa-pestanas button[aria-pressed='true'] { border-color: var(--ng-navy); background: var(--ng-navy); color: white; }
+.mapa-aviso, .aviso-ruta-vacia { color: var(--ng-ink-soft); font-size: 0.88rem; }
+.leyenda-mapa { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.5rem; font-size: 0.8rem; color: var(--ng-ink-soft); }
+.leyenda-mapa span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.leyenda-punto { width: 0.7rem; height: 0.7rem; display: inline-block; border-radius: 50%; }
+.leyenda-punto--paso { background: #48e9f7; border: 1px solid #17324d; }
+.leyenda-punto--meta { background: #25834a; }
+.leyenda-punto--origen { background: #25834a; }
+.aviso-ruta-vacia { margin-top: 1.25rem; }
+
 .carrusel img {
   width: 100%;
   aspect-ratio: 16 / 10;
@@ -223,51 +437,6 @@ onMounted(cargar)
 
 .punto.activo {
   background: white;
-}
-
-.placeholder-mapa {
-  margin-top: 1rem;
-  aspect-ratio: 16 / 10;
-  background: #D9D9D9;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #8A8A8A;
-  font-size: 0.9rem;
-}
-
-.pasos {
-  list-style: none;
-  margin-top: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-}
-
-.pasos li {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
-}
-
-.numero {
-  flex-shrink: 0;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 50%;
-  background: var(--ng-navy);
-  color: white;
-  font-size: 0.8rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.texto {
-  font-size: 0.95rem;
-  padding-top: 0.1rem;
 }
 
 .estado {
