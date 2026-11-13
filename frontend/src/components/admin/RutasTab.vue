@@ -51,6 +51,28 @@ function instruccionFinal(ruta) {
   return ruta.espacio?.instruccionFinal?.trim() || ''
 }
 
+// Quitar la instrucción final deja el campo del espacio vacío (el campo es
+// obligatorio solo al crear). Afecta al espacio, o sea a todas las rutas que llegan a él.
+const quitandoFinalId = ref(null)
+
+async function quitarInstruccionFinal(ruta) {
+  if (!ruta.espacioId) return
+  const confirmado = confirm(
+    `¿Quitar la instrucción final de "${ruta.espacio.nombre}"?\n\nSe borra del espacio, así que tampoco aparecerá en otras rutas ni en la app pública.`,
+  )
+  if (!confirmado) return
+  quitandoFinalId.value = ruta.espacioId
+  error.value = ''
+  try {
+    await api.actualizarEspacio(ruta.espacioId, { instruccionFinal: '' }, auth.token)
+    await cargar()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    quitandoFinalId.value = null
+  }
+}
+
 function nivelDestino(ruta) {
   if (ruta.espacioId) return 'espacio'
   if (ruta.nodoGrafoId) return 'punto'
@@ -271,6 +293,15 @@ onMounted(cargar)
               <span class="numero-paso numero-paso-final">{{ pasosEdicion.length + 1 }}</span>
               <input :value="instruccionFinal(ruta)" type="text" disabled />
               <span class="etiqueta-final">se edita en la pestaña Espacios</span>
+              <button
+                type="button"
+                class="btn-quitar-paso"
+                title="Quitar la instrucción final del espacio"
+                :disabled="quitandoFinalId === ruta.espacioId"
+                @click="quitarInstruccionFinal(ruta)"
+              >
+                ✕
+              </button>
             </div>
           </div>
 
@@ -311,6 +342,14 @@ onMounted(cargar)
               <li v-if="instruccionFinal(ruta)" class="paso-final">
                 {{ instruccionFinal(ruta) }}
                 <span class="etiqueta-final">instrucción final del espacio</span>
+                <button
+                  type="button"
+                  class="btn-quitar-final"
+                  :disabled="quitandoFinalId === ruta.espacioId"
+                  @click="quitarInstruccionFinal(ruta)"
+                >
+                  {{ quitandoFinalId === ruta.espacioId ? 'Quitando…' : '✕ Quitar' }}
+                </button>
               </li>
             </ol>
           </div>
@@ -600,6 +639,23 @@ onMounted(cargar)
   background: var(--ng-accent-light);
   border-radius: 999px;
   white-space: nowrap;
+}
+
+.btn-quitar-final {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.45rem;
+  background: none;
+  border: 1px solid var(--ng-danger);
+  border-radius: 999px;
+  color: var(--ng-danger);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-quitar-final:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .numero-paso-final {

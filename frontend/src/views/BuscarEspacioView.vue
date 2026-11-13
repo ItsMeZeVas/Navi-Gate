@@ -145,7 +145,7 @@ onMounted(cargarQr)
 
           <ol class="pasos">
             <li v-if="espacioActivo.rutaDesdeQr">{{ espacioActivo.rutaDesdeQr }}</li>
-            <li>{{ espacioActivo.instruccionFinal }}</li>
+            <li v-if="espacioActivo.instruccionFinal">{{ espacioActivo.instruccionFinal }}</li>
           </ol>
         </div>
       </template>
