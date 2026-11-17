@@ -279,7 +279,7 @@ export const campusMaps = [
       { id: 'escaleras-piso-1-e-desde-bloque b', nodeId: null ,x: 23.0682, y: 61.471, label: 'Escaleras' },
       { id: 'pasillo-piso-1-e', nodeId: null ,x: 44.8864, y: 45.7134, label: 'Pasillo' },
       { id: 'entrada-e', nodeId: null ,x: 66.0227, y: 51.774, label: 'Entrada Bloque E' },
-      { id: 'salida-e', nodeId: null ,x: 18.2955, y: 76.8245, label: 'Salida Bloque E' },
+      { id: 'salida-e', nodeId: 110 ,x: 18.2955, y: 76.8245, label: 'Salida Bloque E' },
 
       { id: 'con-ase-tec-fac-ing', nodeId: 297 ,x: 74.2045, y: 20.2588, label: 'Consultorio Asesoría Técnica Facultad de Ingeniería' },
       { id: 'centro-inv-fac-ing', nodeId: 296 ,x: 78.0682, y: 23.8952, label: 'Centro de Investigaciones Facultad de Ingeniería' },
@@ -533,8 +533,8 @@ export const campusMaps = [
       { id: 'cervantes', nodeId: 11 ,x: 23.75, y: 43.6932, label: 'Plaza Cervantes' },
       { id: 'recepcion', nodeId: 21 ,x: 16.25, y: 39.6528, label: 'Recepción' },
       { id: 'carnetizacion', nodeId: 22 ,x: 18.5227, y: 39.6528, label: 'Carnetización' },
-      /*{ id: 'PARQUEADERO', nodeId: 0 ,x: 0, y: 0, label: 'xxx' },
-      { id: 'PARQUEADERO', nodeId: 0 ,x: 0, y: 0, label: 'xxx' },*/
+      { id: 'PARQUEADERO-1', nodeId: 64 ,x: 39.3182, y: 11.774, label: 'Parqueadero 1' },
+      { id: 'PARQUEADERO-2', nodeId: 39 ,x: 66.1364, y: 61.471, label: 'Parqueadero 2' },
       { id: 'obj-per', nodeId: 24 ,x: 22.8409, y: 11.774, label: 'Objetos Perdidos' },
       { id: 'aula-max', nodeId: 18 ,x: 23.9773, y: 18.2386, label: 'Aula Máxima' },
       { id: 'canchas', nodeId: 20 ,x: 18.0682, y: 63.8952, label: 'Canchas Deportivas' },
@@ -542,8 +542,8 @@ export const campusMaps = [
       { id: 'plazoleta', nodeId: 29 ,x: 38.2955, y: 49.3497, label: 'Plazoleta de Comidas' },
       { id: 'muy', nodeId: 43 ,x: 49.2045, y: 49.7538, label: 'MUY' },
       { id: 'artes', nodeId: 41 ,x: 65.1136, y: 39.2487, label: 'Plazoleta de artes y manualidades' },
-      { id: 'nativos', nodeId: 37 ,x: 35.7955, y: 86.1174, label: 'Nativos' },
-      { id: 'carpa', nodeId: 28 ,x: 42.6136, y: 84.0972, label: 'Cara' },
+      { id: 'nativos', nodeId: 37 ,x: 35.6818, y: 87.3295, label: 'Nativos' },
+      { id: 'carpa', nodeId: 28 ,x: 42.6136, y: 84.0972, label: 'Carpa' },
       { id: 'tacos', nodeId: 36 ,x: 51.25, y: 87.3295, label: 'Tacos+' },
       { id: 'delirio', nodeId: 33 ,x: 57.6136, y: 86.5215, label: 'Delirio' },
       { id: 'burguer', nodeId: 38 ,x: 65.3409, y: 86.9255, label: 'Burguer+' },
@@ -554,7 +554,11 @@ export const campusMaps = [
       { id: 'des-tec-inn', nodeId: 291 ,x: 70.7955, y: 25.9154, label: 'Desarrollo tecnológico e innovación' },
       { id: 'trab-col', nodeId: 47 ,x: 75.5682, y: 32.7841, label: 'abajo colaborativo' },
       { id: 'hub-inn', nodeId: 45 ,x: 72.8409, y: 27.9356, label: 'Hub de innovación' },
-      /*{ id: 'xxx', nodeId: 0 ,x: 0, y: 0, label: 'xxx' },*/
+      { id: 'zona-verde', nodeId: 27 ,x: 30, y: 87.3295, label: 'Zona Verde' },
+      { id: 'zona-mesas-1', nodeId: 34 ,x: 32.7273, y: 86.9255, label: 'Zona de mesas 1' },
+      { id: 'zona-mesas-2', nodeId: 35 ,x: 35.7955, y: 86.1174, label: 'Zona de mesas 2' },
+      { id: 'zona-mesas-3', nodeId: 40 ,x: 68.6364, y: 29.1477, label: 'Zona de mesas 3' },
+      { id: 'zona-mesas-4', nodeId: 42 ,x: 50.9091, y: 51.3699, label: 'Zona de mesas 4' },
     ],
   },
 ]
