@@ -35,7 +35,9 @@ const session = useSessionStore()
       Explorar el mapa
     </button>
 
-    <div class="placeholder-mapa">Mapa del campus</div>
+    <button class="mapa-campus" @click="router.push('/app/explorar')" aria-label="Explorar el mapa del campus">
+      <img src="@/assets/MapaInicio.jpeg" alt="Mapa general del campus" loading="lazy" />
+    </button>
 
     <BurbujaEventos />
   </div>
@@ -114,15 +116,22 @@ h1 {
   cursor: pointer;
 }
 
-.placeholder-mapa {
+.mapa-campus {
+  display: block;
+  width: 100%;
   margin-top: 1.5rem;
-  aspect-ratio: 4 / 3;
-  background: #D9D9D9;
+  padding: 0;
+  border: 1px solid var(--color-border);
   border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #8A8A8A;
-  font-size: 0.9rem;
+  overflow: hidden;
+  background: #D9D9D9;
+  cursor: pointer;
+}
+
+.mapa-campus img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
 }
 </style>
